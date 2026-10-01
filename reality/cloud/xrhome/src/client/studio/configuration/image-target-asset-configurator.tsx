@@ -100,7 +100,7 @@ const LoadedImageTargetAssetConfigurator: React.FC<ILoadedImageTargetAssetConfig
   imageTarget,
 }) => {
   const stateCtx = useStudioStateContext()
-  const {t} = useTranslation('cloud-studio-pages')
+  const {t} = useTranslation(['cloud-studio-pages', 'app-pages'])
   const classes = useStyles()
   const {updateImageTarget} = useImageTargetActions()
   const otherImageNames = useOtherImageNames(imageTarget.uuid)
