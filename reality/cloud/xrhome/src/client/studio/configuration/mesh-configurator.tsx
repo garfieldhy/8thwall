@@ -24,8 +24,12 @@ import {GltfLoadBoundary} from '../gltf-load-boundary'
 import {GltfAnimationConfigurator} from './gltf-animation-configurator'
 import {copyDirectProperties} from './copy-component'
 import {useStudioStateContext} from '../studio-state-context'
+import {useDerivedScene} from '../derived-scene-context'
+import {useActiveSpace} from '../hooks/active-space'
 import {ComponentConfiguratorTray} from './component-configurator-tray'
 import {MESH_COMPONENT} from '../hooks/available-components'
+import {StaticBanner} from '../../ui/components/banner'
+import {RowContent} from './row-content'
 import {
   MODEL_URL_VALUE, MeshCategoryType, MeshConfiguratorMenu, SPLAT_URL_VALUE,
 } from './mesh-configurator-menu'
@@ -34,6 +38,7 @@ import {
 } from './three-material-util'
 import {CompactImagePicker} from '../ui/compact-image-picker'
 import {
+  CAMERA_COMPONENT,
   GEOMETRY_COMPONENT, GLTF_MODEL_COMPONENT, MATERIAL_COMPONENT, MESH_COMPONENTS,
   SHADOW_COMPONENT, SPLAT_COMPONENT,
 } from './direct-property-components'
@@ -42,6 +47,9 @@ import {
   renderValueColor,
   makeRenderValueVisualResource,
 } from './diff-chip-default-renderers'
+import {BoldButton} from '../../ui/components/bold-button'
+import {SpaceBetween} from '../../ui/layout/space-between'
+import {setSectionCollapsed} from '../hooks/collapsed-section'
 
 interface IGltfMeshMaterialConfigurator {
   url: string
@@ -302,6 +310,18 @@ const MeshConfigurator: React.FC<IMeshConfigurator> = (
   const {t} = useTranslation(['cloud-studio-pages', 'common'])
   const stateCtx = useStudioStateContext()
   const isFaceGeometry = object.geometry && object.geometry.type === 'face'
+  const derivedScene = useDerivedScene()
+  const activeSpace = useActiveSpace()
+  const cameraObj = derivedScene.getActiveCamera(activeSpace?.id)
+  const camera = cameraObj ? cameraObj.camera : null
+  const faceConfig = camera?.xr?.face ?? null
+  const isFaceCamera = camera?.xr?.xrCameraType === 'face'
+  const hasFaceGeometry = !!(
+    faceConfig?.meshGeometryFace ||
+    faceConfig?.meshGeometryEyes ||
+    faceConfig?.meshGeometryIris ||
+    faceConfig?.meshGeometryMouth
+  )
 
   const geometryValue = () => {
     if (object.gltfModel?.src) {
@@ -417,11 +437,30 @@ const MeshConfigurator: React.FC<IMeshConfigurator> = (
         GLTF_MODEL_COMPONENT, SHADOW_COMPONENT,
       ]}
     >
-      <MeshConfiguratorMenu
+      {!isFaceGeometry && <MeshConfiguratorMenu
         value={geometryValue()}
         onChange={handleGeometrySelect}
         disabled={isFaceGeometry}
-      />
+      />}
+      {isFaceGeometry && isFaceCamera && !hasFaceGeometry &&
+        <RowContent>
+          <StaticBanner type='warning'>
+            <SpaceBetween direction='vertical'>
+              {t('mesh_configurator.face_geometry_disabled_warning')}
+              <SpaceBetween>
+                <BoldButton
+                  onClick={() => {
+                    setSectionCollapsed(stateCtx, cameraObj.id, CAMERA_COMPONENT, false)
+                    stateCtx.setSelection(cameraObj.id)
+                  }}
+                >
+                  {t('button.edit', {ns: 'common'})}
+                </BoldButton>
+              </SpaceBetween>
+            </SpaceBetween>
+          </StaticBanner>
+        </RowContent>
+      }
       {object.gltfModel?.src?.type === 'url' &&
         <RowTextField
           id='geometry-url'

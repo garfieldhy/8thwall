@@ -10,9 +10,8 @@ cc_library {
     "//c8/stats:scope-timer",
     "@libgit2//:libgit2",
   };
-  copts = {"-Iexternal/libgit2/src"};
 }
-cc_end(0x53e9cc23);
+cc_end(0xdcfe48a9);
 
 #include <git2.h>
 #include <git2/oid.h>
@@ -33,11 +32,11 @@ ConstRootMessage<G8ClientResponse> g8ClientCreate(ClientContext &ctx) {
 
   for (const auto client : req.getClient()) {
     if (!clientNameIsValid(client.cStr())) {
-      RESPOND_ERROR(
-        strCat(
-          "Invalid client name: ",
-          client.cStr(), 
-          "; only numbers, letters, un-bounding dashes (-), and un-bounding underscores (_) ([a-zA-Z0-9])"));
+      RESPOND_ERROR(strCat(
+        "Invalid client name: ",
+        client.cStr(),
+        "; only numbers, letters, un-bounding dashes (-), and un-bounding underscores (_) "
+        "([a-zA-Z0-9])"));
     }
   }
 

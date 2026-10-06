@@ -2,13 +2,13 @@ import {readFileSync} from 'fs'
 
 import type {Recording, SequenceMetadata} from '../src/client/editor/app-preview/app-preview-utils'
 
-/* eslint-disable max-len */
+/* eslint-disable @stylistic/max-len */
 // Usage:
 // - Go to https://docs.google.com/spreadsheets/d/<REMOVED_BEFORE_OPEN_SOURCING>
 // - Paste this into your terminal: pbpaste | npx ts-node tools/process-sequences.ts -- > ~/repo/prod8/cdn/web/app-preview/sequence_metadata.json
 // - Copy the spreadsheet to your clipboard
 // - Press enter in the terminal
-/* eslint-enable max-len */
+/* eslint-enable @stylistic/max-len */
 
 const data = readFileSync(0, 'utf8')
 
@@ -33,7 +33,6 @@ const asUrl = (v: any) => {
   }
 }
 
-// eslint-disable-next-line arrow-parens
 const asOneOf = <T>(values: T[], v: any): T => {
   if (!values.includes(v)) {
     throw new Error(`Expected one of ${values.join(', ')}, got ${v}`)
@@ -41,7 +40,6 @@ const asOneOf = <T>(values: T[], v: any): T => {
   return v
 }
 
-// eslint-disable-next-line arrow-parens
 const optionalOr = <T>(v: any, fn: (v: any) => T) => {
   if (!v) {
     return undefined
@@ -87,7 +85,7 @@ const parsedRows = rows.map((row) => {
 }))
 
 const sequenceMetadata: SequenceMetadata = {
-  // eslint-disable-next-line max-len
+  // eslint-disable-next-line @stylistic/max-len
   defaultUserAgent: 'Mozilla/5.0 (Linux; Android 10; Pixel 3a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Mobile Safari/537.36',
   sequences: [],
 }

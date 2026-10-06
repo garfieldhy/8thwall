@@ -1,7 +1,5 @@
 licenses(["permissive"])  # GPL 2.0 with Linking Exception.
 
-load("@the8thwall//bzl/wasm:wasm.bzl", "wasm_binary")
-
 genrule(
     name = "features-js-h",
     outs = ["include/git2_features.h"],
@@ -184,13 +182,6 @@ cc_library(
         ],
     ),
     copts = [
-        "-Iexternal/libgit2/src/libgit2",
-        "-Iexternal/libgit2/src/util",
-        "-Iexternal/libgit2/src/util/hash",
-        "-Iexternal/libgit2/include",
-        "-Iexternal/libgit2/include/git2",
-        "-Iexternal/libgit2/deps/http-parser",
-        "-Iexternal/libgit2/deps/picosha2",
         "-DSONAME=OFF",
         "-DUSE_HTTPS=OFF",
         "-DBUILD_SHARED_LIBS=OFF",
@@ -213,7 +204,15 @@ cc_library(
         ],
     }),
     includes = [
+        "src/libgit2",
+        "src/util",
+        "src/util/hash",
+    ] + [
         "include",
+        "include/git2",
+    ] + [
+        "deps/http-parser",
+        "deps/picosha2",
     ],
     linkopts = select({
         "@the8thwall//bzl/conditions:osx": [

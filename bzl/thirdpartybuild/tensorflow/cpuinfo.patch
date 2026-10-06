@@ -1,0 +1,91 @@
+--- /dev/null
++++ b/MODULE.bazel
+@@ -0,0 +1,8 @@
++module(
++    name = "cpuinfo",
++    repo_name = "org_pytorch_cpuinfo",
++    version = "0.0.0-20220819-8ec7bd9",
++)
++
++bazel_dep(name = "bazel_skylib", version = "1.7.1")
++bazel_dep(name = "platforms", version = "0.0.11")
+diff --git a/BUILD.bazel b/BUILD.bazel
+index 90bef8d..f17514d 100644
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -6,6 +6,8 @@ package(default_visibility = ["//visibility:public"])
+ 
+ licenses(["notice"])
+ 
++load("@bazel_skylib//lib:selects.bzl", "selects")
++
+ exports_files(["LICENSE"])
+ 
+ C99OPTS = [
+@@ -394,20 +396,62 @@ config_setting(
+ )
+ 
+ config_setting(
+-    name = "emscripten_wasm",
++    name = "cpu_wasm",
+     values = {
+         "cpu": "wasm",
+     },
++    visibility = ["//visibility:private"],
+ )
+ 
+ config_setting(
+-    name = "emscripten_wasmsimd",
++    name = "cpu_wasm32",
+     values = {
+-        "cpu": "wasm",
+-        "features": "wasm_simd",
++        "cpu": "wasm32",
++    },
++    visibility = ["//visibility:private"],
++)
++
++config_setting(
++    name = "platforms_wasm32",
++    constraint_values = [
++        "@platforms//cpu:wasm32",
++    ],
++    visibility = ["//visibility:private"],
++)
++
++config_setting(
++    name = "platforms_wasm64",
++    constraint_values = [
++        "@platforms//cpu:wasm64",
++    ],
++    visibility = ["//visibility:private"],
++)
++
++selects.config_setting_group(
++    name = "emscripten_wasm",
++    match_any = [
++        ":cpu_wasm",
++        ":cpu_wasm32",
++        ":platforms_wasm32",
++        ":platforms_wasm64",
++    ],
++)
++
++config_setting(
++    name = "simd",
++    values = {
++        "features": "simd",
+     },
+ )
+ 
++selects.config_setting_group(
++    name = "emscripten_wasmsimd",
++    match_all = [
++        ":emscripten_wasm",
++        ":simd",
++    ],
++)
++
+ config_setting(
+     name = "emscripten_asmjs",
+     values = {

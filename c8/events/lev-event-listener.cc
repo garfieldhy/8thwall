@@ -1,7 +1,7 @@
 // Copyright (c) 2018 8th Wall, Inc.
 // Original Author: Dat Chu (dat@8thwall.com)
 
-#include "bzl/inliner/rules.h"
+#include "bzl/inliner/rules2.h"
 
 cc_library {
   hdrs = {
@@ -9,13 +9,13 @@ cc_library {
   };
   deps = {
     ":event-listener",
-    "//bzl/inliner:rules",
     "//c8:c8-log",
     "//c8:exceptions",
     "//c8:map",
     "@libevent//:event",
   };
 }
+cc_end(0x9516ca98);
 #include <event2/event.h>
 
 #include "c8/c8-log.h"
@@ -31,19 +31,19 @@ constexpr auto SOCKPAIR_TYPE = AF_INET;
 constexpr auto SOCKPAIR_TYPE = AF_UNIX;
 #endif
 
-std::map<EventFlags, short> EventFlagToLevFlag = {{EventFlag::READ, EV_READ},
-                                                  {EventFlag::WRITE, EV_WRITE},
-                                                  {EventFlag::EDGE_TRIGGER, EV_ET},
-                                                  {EventFlag::PERSIST, EV_PERSIST}};
-}
+std::map<EventFlags, short> EventFlagToLevFlag = {
+  {EventFlag::READ, EV_READ},
+  {EventFlag::WRITE, EV_WRITE},
+  {EventFlag::EDGE_TRIGGER, EV_ET},
+  {EventFlag::PERSIST, EV_PERSIST}};
+}  // namespace
 
 LevEventListener::LevEventListener() {
 #ifdef _WIN32
   WSADATA WsaData;
   int startupCode = WSAStartup(0x0201, &WsaData);
   if (startupCode != 0) {
-    C8_THROW(
-      "Unable to initialize Windows Winsock. Error code = " + std::to_string(startupCode));
+    C8_THROW("Unable to initialize Windows Winsock. Error code = " + std::to_string(startupCode));
   }
 #endif
 

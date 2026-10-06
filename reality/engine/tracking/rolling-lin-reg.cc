@@ -1,14 +1,13 @@
 // Copyright (c) 2017 8th Wall, Inc.
 // Original Author: Scott Pollack (scott@8thwall.com)
 
-#include "bzl/inliner/rules.h"
+#include "bzl/inliner/rules2.h"
 
 cc_library {
   hdrs = {"rolling-lin-reg.h"};
-  deps = {
-    "//bzl/inliner:rules",
-  };
+  deps = {};
 }
+cc_end(0x4a756668);
 
 #include <iostream>
 
@@ -40,12 +39,8 @@ float RollingLinReg::slope(float x, float y) {
   return beta_;
 }
 
-float RollingLinReg::slope() const {
-  return beta_;
-}
+float RollingLinReg::slope() const { return beta_; }
 
-float RollingLinReg::offset() const {
-  return alpha_;
-}
+float RollingLinReg::offset() const { return alpha_; }
 
 }  // namespace c8

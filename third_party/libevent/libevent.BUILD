@@ -137,17 +137,14 @@ cc_library(
         ":impls",
         ":extras",
     ] + select({
-      "@the8thwall//bzl/conditions:windows": [":windows-srcs"],
-      "//conditions:default": [],
+        "@the8thwall//bzl/conditions:windows": [":windows-srcs"],
+        "//conditions:default": [],
     }),
     hdrs = [
         # Included headers.
         ":public-headers",
     ],
     copts = [
-        "-Iexternal/libevent",
-        "-Iexternal/libevent/compat",
-        "-Iexternal/libevent/include",
         "-fno-strict-aliasing",
         "-Wno-unneeded-internal-declaration",
         "-Wno-implicit-function-declaration",
@@ -160,14 +157,18 @@ cc_library(
         "-Wno-empty-translation-unit",
         "-Wno-everything",  # Needed to silence comparison between pointer and integer.
     ],
-    includes = ["include"],
+    includes = [
+        ".",
+        "compat",
+        "include",
+    ],
     linkopts = select({
-      "@the8thwall//bzl/conditions:windows": [
-          "-lws2_32",
-          "-lshell32",
-          "-ladvapi32",
-      ],
-      "//conditions:default": [],
+        "@the8thwall//bzl/conditions:windows": [
+            "-lws2_32",
+            "-lshell32",
+            "-ladvapi32",
+        ],
+        "//conditions:default": [],
     }),
     deps = [
         "@the8thwall//third_party/libevent:platform-specific-headers",

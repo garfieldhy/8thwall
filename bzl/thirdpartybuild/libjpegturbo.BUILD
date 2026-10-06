@@ -1,5 +1,4 @@
 load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
-load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@the8thwall//bzl/assemble:nasm_assemble.bzl", "nasm_assemble")
 
 licenses(["notice"])  # custom notice-style license, see LICENSE.md
@@ -157,7 +156,6 @@ cc_library(
         "turbojpeg.h",
     ],
     copts = libjpegturbo_copts + [
-        "-Iexternal/libjpegturbo",
         "-DBMP_SUPPORTED",
         "-DPPM_SUPPORTED",
     ],

@@ -260,6 +260,36 @@ describe('Cloud Studio - Parse Component Ast', () => {
           },
         }])
     })
+    it('Should support multiline', () => {
+      const content = `ecs.registerComponent({
+        name: 'example',
+        schema: {
+          // @multiline
+          longText: ecs.string,
+        },
+      })\n`
+      assert.deepEqual(parseComponentAst(content).componentData,
+        [{
+          name: 'example',
+          schema: {longText: 'string'},
+          schemaDefaults: undefined,
+          schemaPresentation: {
+            fields: {
+              longText: {
+                mode: 'multiline',
+              },
+            },
+            groups: {},
+            sections: {},
+          },
+          location: {
+            startLine: 1,
+            startColumn: 4,
+            endLine: 1,
+            endColumn: 21,
+          },
+        }])
+    })
     it('Should return enum values and labels', () => {
       const content = `ecs.registerComponent({
         name: 'example',
@@ -1126,7 +1156,7 @@ describe('Cloud Studio - Parse Component Ast', () => {
       })\n`
       assert.deepEqualExcludingEvery(parseComponentAst(content).errors,
         [{
-          // eslint-disable-next-line max-len
+          // eslint-disable-next-line @stylistic/max-len
           message: 'expected a number type for property \'y\' in vector3 group \'someVectorGroup\' (received string)',
           severity: 'warning',
         }],

@@ -3,8 +3,9 @@
 
 #include <cstdint>
 #include <memory>
-#include "external/png/png.h"
+
 #include "c8/pixels/pixel-buffer.h"
+#include "png.h"
 
 namespace c8 {
 class PngBufferReader {

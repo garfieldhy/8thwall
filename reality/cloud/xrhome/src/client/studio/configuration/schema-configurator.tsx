@@ -29,6 +29,8 @@ import {SubMenuSelectWithSearch} from '../ui/submenu-select-with-search'
 import {useSelectedObjects} from '../hooks/selected-objects'
 import {TextNotification} from '../../ui/components/text-notification'
 import {useDerivedScene} from '../derived-scene-context'
+import {StandardTextAreaField} from '../../ui/components/standard-text-area-field'
+import {RowFieldLabel} from './row-field-label'
 
 const useStyles = createUseStyles({
   selectContainer: {
@@ -123,6 +125,23 @@ const StringColorField: React.FC<FieldProps<string>> = ({label, value, onChange}
   )
 }
 
+const MultilineStringField: React.FC<FieldProps<string>> = ({label, value, onChange}) => {
+  const rowClasses = useRowStyles()
+
+  return (
+    <div className={rowClasses.row}>
+      <StandardTextAreaField
+        label={<RowFieldLabel label={label} expanseField={undefined} />}
+        value={String(value)}
+        onChange={(e) => {
+          onChange(e.target.value)
+        }}
+        rows={3}
+      />
+    </div>
+  )
+}
+
 interface IEidFieldEditor {
   label: string
   value: EntityReference | null
@@ -174,7 +193,8 @@ const EidFieldEditor: React.FC<IEidFieldEditor> = ({label, value, onChange, requ
             value: id,
             content: displayNameForObject(object),
           }
-        })],
+        }),
+      ],
     },
   ]
 
@@ -330,6 +350,14 @@ const Field: React.FC<IField> = ({label, type, value, defaultValue, presentation
             onChange={onChange}
           />
         )
+      } else if (presentation?.mode === 'multiline') {
+        return (
+          <MultilineStringField
+            label={label}
+            value={value ?? defaultValue ?? ''}
+            onChange={onChange}
+          />
+        )
       }
       return <StringField label={label} value={value ?? defaultValue} onChange={onChange} />
     case 'boolean':
@@ -358,7 +386,6 @@ interface ISchemaSingleField<T extends Schema> {
   onChange: (updater: (current: ReadData<T>) => ReadData<T>) => void
 }
 
-// eslint-disable-next-line arrow-parens
 const SchemaSingleField = <T extends Schema>({
   name, presentation, type, metadata, values, onChange,
 }: ISchemaSingleField<T>) => {
@@ -399,7 +426,8 @@ const SchemaSingleField = <T extends Schema>({
           selectedAttribute={attribute}
           onChange={handleChange}
         />
-      ) }
+      )
+    }
 
     default:
       return (
@@ -494,7 +522,7 @@ const SchemaConfigurator = <T extends Schema>({
         onChange={onChange}
       />}
   </div>
-  )
+)
 
 export {
   SchemaConfigurator,

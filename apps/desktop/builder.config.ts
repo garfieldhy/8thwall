@@ -6,7 +6,7 @@
 // @attr(esnext = 1)
 // @attr(commonjs = 1)
 
-import {STUDIO_HUB_PROTOCOL} from './app/desktop-protocol'
+import {STUDIO_HUB_PROTOCOL} from './src/core/desktop-protocol'
 
 const {RELEASE} = process.env
 
@@ -34,7 +34,7 @@ export default {
     onlyLoadAppFromAsar: true,
   },
   files: [
-    'app/dist/**/*',
+    'dist/**/*',
     'node_modules/**/*',
     '!node_modules/npm/**/*',
     '!node_modules/**/test/**/*',
@@ -96,7 +96,7 @@ export default {
     target: 'nsis',
     icon: 'assets/icon.ico',
     signtoolOptions: {
-      sign: './windows-sign.js',
+      sign: './tools/windows-sign.js',
     },
   },
   nsis: {

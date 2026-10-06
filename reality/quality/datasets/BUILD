@@ -1,5 +1,3 @@
-load("//bzl/js:js.bzl", "js_cli")
-
 cc_library(
     name = "benchmark-dataset",
     testonly = 1,
@@ -18,7 +16,6 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        "//bzl/inliner:rules",
         "//c8:map",
         "//c8:string",
         "//c8:vector",
@@ -26,4 +23,3 @@ cc_library(
         "//c8/pixels:pixel-buffer",
     ],
 )
-

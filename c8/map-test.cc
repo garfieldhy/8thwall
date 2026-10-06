@@ -6,7 +6,7 @@
 cc_test {
   size = "small";
   deps = {
-    ":map", "//bzl/inliner:rules",
+    ":map",
     "@com_google_googletest//:gtest_main",
     "//c8:string",
   };
@@ -16,7 +16,6 @@ cc_end(0x5aa1e57d);
 #include "c8/map.h"
 #include "c8/string.h"
 #include "gmock/gmock.h"
-
 #include "gtest/gtest.h"
 
 using ::testing::ContainerEq;

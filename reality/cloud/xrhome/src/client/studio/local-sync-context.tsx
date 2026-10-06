@@ -24,10 +24,16 @@ import {getRuntimeMetadataQuery} from './runtime-version/use-runtime-metadata'
 import {getProjectConfigStatusQuery} from '../hooks/use-project-config'
 
 type FileSyncStatus =
-| 'checking'  // Checking what the local state is
-| 'initialized'  // Local sync was already initialized, ready to start listening
-| 'listening'  // Listening for local changes
-| 'active'  // Actively syncing files, changes are being processed
+  | 'checking'  // Checking what the local state is
+  | 'initialized'  // Local sync was already initialized, ready to start listening
+  | 'listening'  // Listening for local changes
+  | 'active'  // Actively syncing files, changes are being processed
+
+type BuildStatus =
+  | 'starting'
+  | 'npm-install-failed'
+  | 'failed'
+  | 'running'
 
 type ILocalSyncContext = {
   appKey: string
@@ -35,6 +41,7 @@ type ILocalSyncContext = {
   localBuildRemoteUrl?: string
   assetVersions: Record<string, string>
   fileSyncStatus: FileSyncStatus
+  buildStatus: BuildStatus
   restartServer: () => Promise<void>
 }
 
@@ -110,6 +117,7 @@ const LocalSyncContextProvider: React.FC<{children: React.ReactNode}> = ({childr
   const git = useCurrentGit()
   const {filesByPath, repo} = git
   const [fileSyncStatus, setFileSyncStatus] = React.useState<FileSyncStatus>('checking')
+  const [buildStatus, setBuildStatus] = React.useState<BuildStatus>('starting')
   const {saveFiles, deleteFile, deleteFiles, createFolder} = useActions(coreGitActions)
   const [localBuildUrl, setLocalBuildUrl] = React.useState<string>('')
   const [localBuildRemoteUrl, setLocalBuildRemoteUrl] = React.useState<string>('')
@@ -258,6 +266,8 @@ const LocalSyncContextProvider: React.FC<{children: React.ReactNode}> = ({childr
     }
   })
 
+  // NOTE(christoph): The effect to initialize the empty git state may not have run yet
+  const canListen = !!repo
   React.useEffect(() => {
     window.electron.fileWatch?.addHandler(appKey, handleLocalSyncMessage)
     setFileSyncStatus('listening')
@@ -265,7 +275,7 @@ const LocalSyncContextProvider: React.FC<{children: React.ReactNode}> = ({childr
     return () => {
       window.electron.fileWatch?.removeHandler(appKey)
     }
-  }, [appKey])
+  }, [canListen, appKey])
 
   const canSyncFiles = fileSyncStatus === 'listening'
   useAbandonableEffect(async (abandon) => {
@@ -317,8 +327,7 @@ const LocalSyncContextProvider: React.FC<{children: React.ReactNode}> = ({childr
         setPendingWrite(pendingWritesRef, path, 'disk')
       }
       await pushFile(appKey, path, content)
-      return
-    } catch (error) {
+    } catch {
       stateCtx.update({
         errorMsg: t('local_sync.error.invalid_file', {filePath: path}),
       })
@@ -343,18 +352,41 @@ const LocalSyncContextProvider: React.FC<{children: React.ReactNode}> = ({childr
       setLocalBuildRemoteUrl('')
     }
 
-    queryClient.invalidateQueries(getRuntimeMetadataQuery(appKey))
+    const runtimeQuery = getRuntimeMetadataQuery(appKey)
+    queryClient.cancelQueries(runtimeQuery)
+    queryClient.invalidateQueries(runtimeQuery)
+
     queryClient.invalidateQueries(getProjectConfigStatusQuery(appKey))
   }
 
+  const startBuild = async () => {
+    setBuildStatus('starting')
+    try {
+      await watchLocal(appKey)
+      setBuildStatus('running')
+    } catch (err) {
+      let status: BuildStatus = 'failed'
+      try {
+        const {reason} = await err.res.json()
+        if (reason === 'npm-install') {
+          status = 'npm-install-failed'
+        }
+      } catch {
+        // Unable to extract reason, continue with default reason
+      }
+      setBuildStatus(status)
+      throw err
+    }
+  }
+
   useAbandonableEffect(async (abandon) => {
-    await abandon(watchLocal(appKey))
+    await abandon(startBuild())
     await refreshServerUrls()
   }, [appKey])
 
   const restartServer = async () => {
     await stopWatchLocal(appKey)
-    await watchLocal(appKey)
+    await startBuild()
     await refreshServerUrls()
   }
 
@@ -414,6 +446,7 @@ const LocalSyncContextProvider: React.FC<{children: React.ReactNode}> = ({childr
     localBuildRemoteUrl,
     assetVersions,
     fileSyncStatus,
+    buildStatus,
     restartServer,
   }
 

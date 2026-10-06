@@ -3,7 +3,7 @@ WORKSPACE_NAME = "the8thwall"
 workspace(name = WORKSPACE_NAME)
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:jvm.bzl", "jvm_maven_import_external")
 load("//bzl/android:android-sdk.bzl", "android_sdk")
 load("//bzl/crosstool:emscripten.bzl", "emscripten_config", "emscripten_toolchain")
@@ -25,15 +25,6 @@ http_archive(
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
 
 bazel_skylib_workspace()
-
-# Explicitly overriding remote_coverage_tools
-# Needed by bazel query because bazel internals do not offer a public alternative like others (https://bit.ly/3FkzxHz)
-# IMPORTANT!! Remember to check distdir_defs.bzl on bazel branch
-# at tag (https://bit.ly/46AFKv8)everytime we upgrade bazel version
-local_repository(
-    name = "remote_coverage_tools",
-    path = "third_party/remote_coverage_tools",
-)
 
 # Explicitly register go toolchain to the version used in tensorflow
 http_archive(
@@ -122,70 +113,6 @@ pip_parse(
 load("@v8_python_deps//:requirements.bzl", v8_python_deps_install_deps = "install_deps")
 
 v8_python_deps_install_deps()
-
-pip_parse(
-    name = "a4lidartag_deps",
-    envsubst = ["PIP_INDEX_URL"],
-    extra_pip_args = [
-        "--index-url",
-        "${PIP_INDEX_URL:-https://pypi.org/simple}",
-    ],
-    python_interpreter_target = python_interpreter,
-    requirements_lock = "//bzl/python:a4lidartag_requirements.txt",
-)
-
-# Define repos for python pip dependencies.
-load("@a4lidartag_deps//:requirements.bzl", a4lidartag_install_deps = "install_deps")
-
-a4lidartag_install_deps()
-
-pip_parse(
-    name = "whismur_deps",
-    envsubst = ["PIP_INDEX_URL"],
-    extra_pip_args = [
-        "--index-url",
-        "${PIP_INDEX_URL:-https://pypi.org/simple}",
-    ],
-    python_interpreter_target = python_interpreter,
-    requirements_lock = "//bzl/python:whismur_requirements.txt",
-)
-
-# Define repos for python pip dependencies.
-load("@whismur_deps//:requirements.bzl", whismur_install_deps = "install_deps")
-
-whismur_install_deps()
-
-pip_parse(
-    name = "benchmark_quest_deps",
-    envsubst = ["PIP_INDEX_URL"],
-    extra_pip_args = [
-        "--index-url",
-        "${PIP_INDEX_URL:-https://pypi.org/simple}",
-    ],
-    python_interpreter_target = python_interpreter,
-    requirements_lock = "//bzl/python:benchmark_quest_requirements.txt",
-)
-
-# Define repos for python pip dependencies.
-load("@benchmark_quest_deps//:requirements.bzl", benchmark_quest_install_deps = "install_deps")
-
-benchmark_quest_install_deps()
-
-pip_parse(
-    name = "nae_publish_deps",
-    envsubst = ["PIP_INDEX_URL"],
-    extra_pip_args = [
-        "--index-url",
-        "${PIP_INDEX_URL:-https://pypi.org/simple}",
-    ],
-    python_interpreter_target = python_interpreter,
-    requirements_lock = "//bzl/python:nae_publish_requirements.txt",
-)
-
-# Define repos for python pip dependencies.
-load("@nae_publish_deps//:requirements.bzl", nae_publish_install_deps = "install_deps")
-
-nae_publish_install_deps()
 
 ################################################# END 1
 
@@ -400,15 +327,6 @@ jvm_maven_import_external(
     server_urls = ["https://repo1.maven.org/maven2/"],
 )
 
-# Mono toolchains.
-http_archive(
-    name = "mono-macosx",
-    build_file = "//bzl/thirdpartybuild:mono.BUILD",
-    sha256 = "8d569e7dc07207a3e008b3756bb1f10a93a720e325dcf559e6e0e5a449b94421",
-    strip_prefix = "Mono.framework/Versions/6.12.0",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/mono/Mono.framework-6.12.0-macosx-x86_64.tar",
-)
-
 # Register mono toolchains.
 register_toolchains(
     "//bzl/mono:mono-macosx",
@@ -416,28 +334,23 @@ register_toolchains(
 
 # Load rules_nodejs to provide nodejs toolchains.
 http_archive(
-    name = "build_bazel_rules_nodejs",
-    sha256 = "709cc0dcb51cf9028dd57c268066e5bc8f03a119ded410a13b5c3925d6e43c48",
+    name = "rules_nodejs",
+    sha256 = "b6016a89a12a3d339ece93f2b3988f5e812f452ad497bc963634646ff4aa100b",
+    strip_prefix = "rules_nodejs-6.1.2",
     urls = [
-        "https://github.com/bazelbuild/rules_nodejs/releases/download/5.8.4/rules_nodejs-5.8.4.tar.gz",
+        "https://github.com/bazelbuild/rules_nodejs/releases/download/v6.1.2/rules_nodejs-v6.1.2.tar.gz",
     ],
 )
 
 # Rules for downloading Node.js toolchains.
-load(
-    "@build_bazel_rules_nodejs//:repositories.bzl",
-    "build_bazel_rules_nodejs_dependencies",
-)
+load("@rules_nodejs//nodejs:repositories.bzl", "nodejs_register_toolchains", "rules_nodejs_dependencies")
 
-build_bazel_rules_nodejs_dependencies()
+rules_nodejs_dependencies()
 
-load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
-
-# Node toolchain to install.
-node_repositories(
-    # https://github.com/bazel-contrib/rules_nodejs/blob/5.8.4/nodejs/private/node_versions.bzl
-    node_version = "18.17.0",
-    yarn_version = "1.22.18",
+nodejs_register_toolchains(
+    # https://github.com/bazel-contrib/rules_nodejs/blob/v6.1.2/nodejs/private/node_versions.bzl
+    name = "nodejs",
+    node_version = "20.14.0",
 )
 
 load("//bzl/crosstool:node-toolchain.bzl", "node_toolchain")
@@ -501,14 +414,14 @@ npm_package(
 # Node modules for eslint.
 npm_package(
     name = "npm-eslint",
+    env = {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "1",
+    },
     exports_files = [
         "node_modules/eslint/bin/eslint.js",
     ],
     package = "//bzl/npmpackage/eslint:package.json",
     package_lock = "//bzl/npmpackage/eslint:package-lock.json",
-    patches = [
-        "//bzl/npmpackage/eslint/patches:eslint-plugin-local-rules+0.1.1.patch",
-    ],
 )
 
 # Node modules for capnp-ts.
@@ -532,13 +445,6 @@ npm_package(
     package_lock = "//bzl/npmpackage/capnpc-js:package-lock.json",
 )
 
-# Node modules for Discord Activity Backend.
-npm_package(
-    name = "npm-discord-activity",
-    package = "//apps/client/exploratory/discord-activity-example:package.json",
-    package_lock = "//apps/client/exploratory/discord-activity-example:package-lock.json",
-)
-
 # Node modules for 8th Wall tune-parameters.
 npm_package(
     name = "npm-tune-parameters",
@@ -546,25 +452,11 @@ npm_package(
     package_lock = "//bzl/npmpackage/tune-parameters:package-lock.json",
 )
 
-# Node modules for 8th Wall responsive immersive.
-npm_package(
-    name = "npm-responsive-immersive",
-    package = "//apps/client/public/web/responsive-immersive:package.json",
-    package_lock = "//apps/client/public/web/responsive-immersive:package-lock.json",
-)
-
 # Node modules for 8th Wall's js engine.
 npm_package(
     name = "npm-jsxr",
     package = "//reality/app/xr/js:package.json",
     package_lock = "//reality/app/xr/js:package-lock.json",
-)
-
-# Node modules for 8th Wall's Omniscope js app.
-npm_package(
-    name = "npm-omni-js",
-    package = "//apps/client/internalqa/omniscope/js:package.json",
-    package_lock = "//apps/client/internalqa/omniscope/js:package-lock.json",
 )
 
 # Node modules for rendering.
@@ -596,27 +488,6 @@ npm_package(
     ],
 )
 
-# Node modules for ecr in reality/cloud/aws/ecr
-npm_package(
-    name = "npm-ecr",
-    package = "//reality/app/nae/npm:package.json",
-    package_lock = "//reality/app/nae/npm:package-lock.json",
-)
-
-# Node modules for nae-assets-car-api in reality/cloud/aws/cdk/nae-assets-car-api
-npm_package(
-    name = "npm-nae-assets-car-api",
-    package = "//reality/cloud/aws/cdk/nae-assets-car-api/src/api:package.json",
-    package_lock = "//reality/cloud/aws/cdk/nae-assets-car-api/src/api:package-lock.json",
-)
-
-# Node modules for scanmap.
-npm_package(
-    name = "npm-scanmap",
-    package = "//apps/client/exploratory/scanmap/npm:package.json",
-    package_lock = "//apps/client/exploratory/scanmap/npm:package-lock.json",
-)
-
 # Node modules for packaging HTML apps into native apps.
 npm_package(
     name = "npm-html-app-packager",
@@ -632,11 +503,6 @@ npm_package(
     ],
     package = "//bzl/npmpackage/tauri-shell:package.json",
     package_lock = "//bzl/npmpackage/tauri-shell:package-lock.json",
-)
-
-# These are execution platforms that are capable of compiling code.
-register_execution_platforms(
-    "@local_execution_config_platform//:platform",
 )
 
 load("//bzl/crosstool:execution-platform-configure.bzl", "execution_platform_configure")
@@ -760,144 +626,6 @@ apple_developer_team(
     },
 )
 
-load("//bzl/unity:unity-version.bzl", "unity_version")
-
-# Creates a 'platform' and 'toolchain' for each version of Unity installed
-# locally (e.g., 2021.3.37f1), and creates a 'constraint_value' for any strings
-# added to the versions attribute for any strings added to the versions
-# attribute.
-#
-# To install new Unity versions on your mac, use the following example command:
-#   brew install unity-hub
-#   /Applications/Unity\ Hub.app/Contents/MacOS/Unity\ Hub -- --headless install -v "2021.3.37f1" -m android ios mac-il2cpp windows-mono
-#
-# If a new Unity version is installed that matches any of the below versions,
-# run 'bazel clean' to update future executions.
-unity_version(
-    name = "unity-version",
-    unity_search_paths = [
-        "/Applications/Unity/Hub/Editor",  # Default for macOS
-        "/opt/niantic/public/unity",  # Default for Linux
-        "/c/Program Files/Unity/Hub/Editor",  # Default for Windows (WSL or msys2 format)
-    ],
-    # Each string below creates a version constraint_value that can be used in
-    # unity rules. Valid strings are major versions, e.g "2022", minor version
-    # "2021.3" or patch versions "2021.3.37f1". These are then accessed as
-    # targets such as "@unity-version//:2021.3".
-    versions = [
-        "6000.0",
-        "2022.3",
-        "2021.3",
-        "2020.3",
-        "2019.4",
-        "2018.4",
-    ],
-)
-
-load("@unity-version//:repo.bzl", "register_unity_toolchains")
-
-register_unity_toolchains()
-
-# Install a newer version of googletest than is provided in org_tensorflow.
-http_archive(
-    name = "com_google_googletest",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party/googletest:googletest-1.14.0-wasm_support.patch",
-    ],
-    sha256 = "8ad598c73ad796e0d8280b082cebd82a630d73e73cd3c70057938a6501bba5d7",
-    strip_prefix = "googletest-1.14.0",
-    urls = [
-        "https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz",
-    ],
-)
-
-# Install a newer version of vulkan_headers than is provided in org_tensorflow.
-http_archive(
-    name = "vulkan_headers",
-    build_file = "//bzl/thirdpartybuild:vulkan-headers.BUILD",
-    sha256 = "45a8c99f867a686b85bbb6fa460dad41840ecfa1ca111a29f044387f47308dce",
-    strip_prefix = "Vulkan-Headers-1.3.296",
-    url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.296.zip",
-)
-
-new_git_repository(
-    name = "vulkan-memory-allocator",
-    build_file = "//bzl/thirdpartybuild:vulkan-memory-allocator.BUILD",
-    commit = "e87036508bb156f9986ea959323de1869e328f58",
-    remote = "https://chromium.googlesource.com/external/github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git",
-    shallow_since = "1689220916 -0400",
-)
-
-http_archive(
-    name = "vulkan-utility-libraries",
-    build_file = "//bzl/thirdpartybuild:vulkan-utility-libraries.BUILD",
-    sha256 = "9dc5247bfb1585ecab48fdd4708b52ba1839cebf0347077bbc897580401b15ca",
-    strip_prefix = "Vulkan-Utility-Libraries-1.3.295",
-    url = "https://github.com/KhronosGroup/Vulkan-Utility-Libraries/archive/v1.3.295.tar.gz",
-)
-
-http_archive(
-    name = "com_google_benchmark",
-    build_file = "//bzl/thirdpartybuild:benchmark.BUILD",
-    sha256 = "3aff99169fa8bdee356eaa1f691e835a6e57b1efeadb8a0f9f228531158246ac",
-    strip_prefix = "benchmark-1.7.0",
-    url = "https://github.com/google/benchmark/archive/refs/tags/v1.7.0.tar.gz",
-)
-
-git_repository(
-    name = "cpuinfo",
-    commit = "8ec7bd91ad0470e61cf38f618cc1f270dede599c",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party/cpuinfo:cpuinfo.fix_support_for_wasm.patch",
-        "//third_party/cpuinfo:cpuinfo.support_cpu_darwin_transition.patch",
-        "//third_party/cpuinfo:cpuinfo.bazel7_detected_correctly_k8.patch",
-    ],
-    remote = "https://github.com/pytorch/cpuinfo.git",
-    repo_mapping = {"@org_pytorch_cpuinfo": "@cpuinfo"},
-    shallow_since = "1660926227 -0700",
-)
-
-git_repository(
-    name = "miniaudio",
-    build_file = "//bzl/thirdpartybuild:miniaudio.BUILD",
-    commit = "4a5b74bef029b3592c54b6048650ee5f972c1a48",  # v0.11.21
-    remote = "https://github.com/mackron/miniaudio.git",
-    shallow_since = "1700011380 +1000",
-)
-
-# Source repo: https://github.com/8thwall/miniaudio-addon
-http_archive(
-    name = "miniaudio-addon",
-    sha256 = "b70cfaaae5cfe2d0974a4ae3e95b85117d5a145c797a2b900758e60a0aac05a3",
-    strip_prefix = "miniaudio-addon-0.11.21-p17",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/miniaudio-addon/miniaudio-addon-0.11.21-p17.tar.gz",
-)
-
-# Install a newer version of gflags than is provided in org_tensorflow.
-git_repository(
-    name = "com_github_gflags_gflags",
-    commit = "986e8eed00ded8168ef4eaa6f925dc6be50b40fa",
-    remote = "https://github.com/gflags/gflags",
-    shallow_since = "1641684284 +0000",
-)
-
-# Mirror XNNPACK that is provided in org_tensorflow to add patch.
-http_archive(
-    name = "XNNPACK",
-    build_file = "//third_party/xnnpack:xnnpack.BUILD",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party/xnnpack:xnnpack_add_android_x86_64_linkopt.patch",  # Fix Bazel ambiguous match error
-        "//third_party/xnnpack:xnnpack.llvm_windows_support.patch",
-        "//third_party/xnnpack:xnnpack.remove_linux_k8_linkopts.patch",  # Resolves ambiguous match on linkopts for :linux_k8 and :android
-    ],
-    sha256 = "7a16ab0d767d9f8819973dbea1dc45e4e08236f89ab702d96f389fdc78c5855c",
-    strip_prefix = "XNNPACK-e8f74a9763aa36559980a0c2f37f587794995622",
-    url = "https://github.com/google/XNNPACK/archive/e8f74a9763aa36559980a0c2f37f587794995622.zip",
-)
-
 # Install a newer version of googleapis than is provided in org_tensorflow.
 niantic_maybe(
     git_repository,
@@ -930,23 +658,6 @@ new_git_repository(
     shallow_since = "1665637615 -0700",
 )
 
-# Zlib with chromium optimizations and extra contributed utility APIs.
-new_git_repository(
-    name = "zlib-chromium",
-    build_file = "//bzl/thirdpartybuild:zlib-chromium.BUILD",
-    commit = "f5fd0ad2663e239a31184ad4c9919991dda16f46",
-    remote = "https://chromium.googlesource.com/chromium/src/third_party/zlib",
-    shallow_since = "1691776355 -0700",
-)
-
-new_git_repository(
-    name = "cnpy",
-    build_file = "//bzl/thirdpartybuild:cnpy.BUILD",
-    commit = "4e8810b1a8637695171ed346ce68f6984e585ef4",
-    remote = "https://github.com/rogersce/cnpy.git",
-    shallow_since = "1527823740 +0000",
-)
-
 # The following rules allow exporting java libraries into maven/artifactory
 # For documentation, see https://github.com/bazelbuild/rules_jvm_external/blob/master/docs/api.md
 RULES_JVM_EXTERNAL_SHA = (
@@ -968,46 +679,6 @@ rules_jvm_external_deps()
 load("@rules_jvm_external//:setup.bzl", "rules_jvm_external_setup")
 
 rules_jvm_external_setup()
-
-# Nia Protobuf 25.3.0 based section - it has to be defined before org_tensorflow section - BEGIN
-
-http_archive(
-    name = "com_github_grpc_grpc",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party/grpc:grpc-v1.27.3-support_nia_protobuf_25.3.patch",
-    ],
-    sha256 = "c2ab8a42a0d673c1acb596d276055adcc074c1116e427f118415da3e79e52969",
-    strip_prefix = "grpc-1.27.3",
-    urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.27.3.tar.gz"],
-)
-
-# The public protobuf repo for the 25.3 release (v3.25.3).  This archive is patched using patch
-# files from nia-protobuf-internal, which includes Niantic-specific changes to protoc and the
-# C# runtime assembly, as described in this document: https://go/niantic-internal-protobuf-doc
-http_archive(
-    name = "com_google_protobuf",
-    sha256 = "674afb2d0daaf266859b4fa8f9f1c051dbac56800a621dfb48d2302842960bfe",
-    strip_prefix = "protobuf-25.3-nia-v0.3",
-    urls = ["https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/protobuf/protobuf-25.3-nia-v0.3.tar"],
-)
-
-# Nia Protobuf 25.3.0 based section - it has to be defined before org_tensorflow section - END
-
-http_archive(
-    name = "org_tensorflow",
-    patches = [
-        "//third_party/tensorflow:tensorflow-v2.11.0-p8-bazel_6.1.2.patch",
-        "//third_party/tensorflow:tensorflow-inject_flatc_redist.patch",
-        "//third_party/tensorflow:tf_protobuf_nia_v0.1.patch",
-        "//third_party/tensorflow:tensorflow_minosversion.patch",
-        "//third_party/tensorflow:tensorflow-v2.11.0-p8-disable_llvm-raw.patch",
-        "//third_party/tensorflow:tensorflow-v2.11.0-p8-fix_ubuntu_local_python_configuration.patch",
-    ],
-    sha256 = "dcf38db689396ac3ae846b060639a0b0f88589acd61fb9100ef30b101d529172",
-    strip_prefix = "tensorflow-v2.11.0-p8",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/tensorflow/tensorflow-v2.11.0-p8.tar",
-)
 
 # If --//bzl/gpu:cuda-support=hermetic the v1-cuda-triplet contains
 # the following tools and libraries :
@@ -1054,35 +725,6 @@ http_archive(
     ],
 )
 
-# More modern protobuf version for use of later protobuf v3 features
-# Assumption is made that the presence of this http_archive does not disrupt
-# the functionality of the protobuf v3.9.2 embedded in the 8w fork of TF, and
-# the protobuf v3.0.0 included above.
-http_archive(
-    name = "com_google_protobuf_3.17.3",
-    sha256 = "528927e398f4e290001886894dac17c5c6a2e5548f3fb68004cfb01af901b53a",
-    strip_prefix = "protobuf-3.17.3",
-    urls = [
-        "https://github.com/protocolbuffers/protobuf/archive/v3.17.3.zip",
-    ],
-)
-
-http_archive(
-    name = "spz",
-    build_file = "//bzl/thirdpartybuild:spz.BUILD",
-    sha256 = "266c144fddb87f428495bbe1e44748fc3f1e5bfaa9e354a5d0d0284c4f8946cc",
-    strip_prefix = "spz-3.0.0",
-    url = "https://github.com/nianticlabs/spz/archive/refs/tags/v3.0.0.tar.gz",
-)
-
-http_archive(
-    name = "zstd",
-    build_file = "//bzl/thirdpartybuild:zstd.BUILD",
-    sha256 = "30f35f71c1203369dc979ecde0400ffea93c27391bfd2ac5a9715d2173d92ff7",
-    strip_prefix = "zstd-1.5.6",
-    url = "https://github.com/facebook/zstd/archive/refs/tags/v1.5.6.tar.gz",
-)
-
 http_archive(
     name = "openssl",
     build_file = "//third_party/openssl:openssl.BUILD",
@@ -1104,36 +746,6 @@ http_archive(
     strip_prefix = "boringssl-51bd4554d-230301_132341",
     url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/boringssl/boringssl-51bd4554d-230301_132341.tar",
 )
-
-new_git_repository(
-    name = "libevent",
-    build_file = "//third_party/libevent:libevent.BUILD",
-    commit = "e7ff4ef2b4fc950a765008c18e74281cdb5e7668",
-    remote = "https://github.com/libevent/libevent",
-    shallow_since = "1485387435 +0300",
-)
-
-# Initialize the TensorFlow repository and all dependencies.
-#
-# The cascade of load() statements and tf_workspace?() calls works around the
-# restriction that load() statements need to be at the top of .bzl files.
-# E.g. we can not retrieve a new repository with http_archive and then load()
-# a macro from that repository in the same file.
-load("@org_tensorflow//tensorflow:workspace3.bzl", "tf_workspace3")
-
-tf_workspace3()
-
-load("@org_tensorflow//tensorflow:workspace2.bzl", "tf_workspace2")
-
-tf_workspace2()
-
-load("@org_tensorflow//tensorflow:workspace1.bzl", "tf_workspace1")
-
-tf_workspace1()
-
-load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")
-
-tf_workspace0()
 
 ### Rules proto grpc project configured for nia protobuf - BEGIN
 
@@ -1197,114 +809,12 @@ load("@rules_proto_grpc//cpp:repositories.bzl", rules_proto_grpc_cpp_repos = "cp
 
 rules_proto_grpc_cpp_repos()
 
-load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
-
-grpc_deps()
-
-load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
-
-grpc_extra_deps()
-
 ### Rules proto grpc project configured for default protobuf - END
-
-http_archive(
-    name = "eigen3",
-    build_file = "//bzl/thirdpartybuild:eigen3.BUILD",
-    patches = [
-        "//third_party/eigen3:TriangularSolver.h.patch",
-    ],
-    sha256 = "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72",
-    strip_prefix = "eigen-3.4.0",
-    url = "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz",
-)
-
-http_archive(
-    name = "giflib",
-    build_file = "//bzl/thirdpartybuild:giflib.BUILD",
-    sha256 = "be7ffbd057cadebe2aa144542fd90c6838c6a083b5e8a9048b8ee3b66b29d5fb",
-    strip_prefix = "giflib-5.2.2",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/giflib/giflib-5.2.2.tar.gz",
-)
-
-new_git_repository(
-    name = "libjpegturbo",
-    build_file = "//bzl/thirdpartybuild:libjpegturbo.BUILD",
-    commit = "9171fd4bdef0f3aecba61413b858b1766bbad8d5",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party/libjpegturbo:turbojpeg.c.patch",
-    ],
-    remote = "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
-    shallow_since = "1651080868 -0500",
-)
-
-new_git_repository(
-    name = "libyuv",
-    build_file = "//bzl/thirdpartybuild:libyuv.BUILD",
-    commit = "de71c67e53d79190b5b7cc760ade9027855dd945",
-    remote = "https://chromium.googlesource.com/libyuv/libyuv",
-    shallow_since = "1651045085 +0000",
-)
-
-new_git_repository(
-    name = "json",
-    build_file = "//bzl/thirdpartybuild:json.BUILD",
-    commit = "4f8fba14066156b73f1189a2b8bd568bde5284c5",
-    remote = "https://github.com/nlohmann/json.git",
-    shallow_since = "1641188409 +0100",
-)
-
-new_git_repository(
-    name = "yaml-cpp",
-    build_file = "//bzl/thirdpartybuild:yaml-cpp.BUILD",
-    commit = "9a3624205e8774953ef18f57067b3426c1c5ada6",
-    remote = "https://github.com/jbeder/yaml-cpp",
-    shallow_since = "1569430560 -0700",
-)
-
-http_archive(
-    name = "cli11",
-    build_file = "//bzl/thirdpartybuild:cli11.BUILD",
-    sha256 = "562c4be7507dc6fb4997ecd648bf935d84efe17b54715fa5cfbddac05279f668",
-    strip_prefix = "CLI11-2.3.2",
-    url = "https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.3.2.zip",
-)
-
-# Log formatter for XCode build output.
-new_git_repository(
-    name = "xcpretty",
-    build_file_content = """
-filegroup(
-    name = 'xcpretty',
-    srcs = glob(
-        include=['**'],
-        exclude=['features/assets/**'],
-    ),
-    visibility = ["//visibility:public"],
-)""",
-    commit = "fb3afc6f4495fa89c2dcb351b274eacb74595285",
-    remote = "https://github.com/supermarin/xcpretty.git",
-    shallow_since = "1476195465 -0700",
-)
-
-# Node modules for trees in the workspace. These should cover all of the js_binary, js_cli, and
-# js_test rules under a given tree in the workspace.
-npm_package(
-    name = "npm-apps-client-gitlab",  # For targets in //apps/client/gitlab
-    package = "//apps/client/gitlab/npm:package.json",
-    package_lock = "//apps/client/gitlab/npm:package-lock.json",
-)
 
 npm_package(
     name = "npm-c8-model-web",  # For targets in //c8/model/web
     package = "//c8/model/web/npm:package.json",
     package_lock = "//c8/model/web/npm:package-lock.json",
-)
-
-npm_package(
-    name = "npm-apps-client-studio2d-web3js",  # For targets in //apps/client/studio2d/web3js
-    package = "//apps/client/studio2d/web3js/npm:package.json",
-    package_lock = "//apps/client/studio2d/web3js/npm:package-lock.json",
 )
 
 npm_package(
@@ -1320,44 +830,9 @@ npm_package(
 )
 
 npm_package(
-    name = "npm-ci-support",  # For targets in //ci-support
-    package = "//ci-support/npm:package.json",
-    package_lock = "//ci-support/npm:package-lock.json",
-)
-
-npm_package(
-    name = "npm-platform-client-geo-game-board",  # For targets in //platform/client/geo-game-board
-    package = "//platform/client/geo-game-board/npm:package.json",
-    package_lock = "//platform/client/geo-game-board/npm:package-lock.json",
-)
-
-npm_package(
     name = "npm-examples-js-resolve",
     package = "//bzl/examples/js/resolve:package.json",
     package_lock = "//bzl/examples/js/resolve:package-lock.json",
-)
-
-npm_package(
-    name = "npm-lambda-edge-log",
-    package = "//reality/cloud/aws/edge-lambda/lambda-edge-log:package.json",
-    package_lock = "//reality/cloud/aws/edge-lambda/lambda-edge-log:package-lock.json",
-)
-
-npm_package(
-    name = "npm-studio-deploy",
-    export_zip = True,
-    package = "//reality/cloud/aws/lambda/studio-deploy:package.json",
-    package_lock = "//reality/cloud/aws/lambda/studio-deploy:package-lock.json",
-    patches = [
-        "//reality/cloud/aws/lambda/studio-deploy/patches:ts-loader+6.2.2.patch",
-    ],
-)
-
-npm_package(
-    name = "npm-ecs-build",
-    export_zip = True,
-    package = "//reality/cloud/studio-local/ecs-build:package.json",
-    package_lock = "//reality/cloud/studio-local/ecs-build:package-lock.json",
 )
 
 npm_package(
@@ -1365,19 +840,6 @@ npm_package(
     export_zip = True,
     package = "//apps/desktop:package.json",
     package_lock = "//apps/desktop:package-lock.json",
-)
-
-npm_package(
-    name = "npm-public-api",
-    export_zip = True,
-    package = "//reality/cloud/aws/lambda/public-api:package.json",
-    package_lock = "//reality/cloud/aws/lambda/public-api:package-lock.json",
-)
-
-npm_package(
-    name = "npm-nae-lambda-builder",
-    package = "//reality/cloud/aws/cdk/nae-lambda-builder:package.json",
-    package_lock = "//reality/cloud/aws/cdk/nae-lambda-builder:package-lock.json",
 )
 
 npm_package(
@@ -1389,13 +851,6 @@ npm_package(
     package_lock = "//bzl/js/proto:package-lock.json",
 )
 # End npm_package rules.
-
-# Created by //reality/cloud/aws/edge-lambda/serve-images/zip-sharp-linux.sh
-http_file(
-    name = "sharp-linux-install",
-    sha256 = "ca33ba4092e1c9ea4d9f68069d06c71563aa90c0ede7b3f14b6ebfe7dfb0e00b",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/sharp/sharp-linux-install-lynjnd4y.zip",
-)
 
 git_repository(
     name = "glslang",
@@ -1419,46 +874,6 @@ git_repository(
     commit = "04896c462d9f3f504c99a4698605b6524af813c1",  # vulkan-sdk-1.3.280
     remote = "https://github.com/KhronosGroup/spirv-tools.git",
     shallow_since = "1709825474 -0500",
-)
-
-new_git_repository(
-    name = "spirv_cross",
-    build_file = "//bzl/thirdpartybuild:spirv-cross.BUILD",
-    commit = "61c603f3baa5270e04bcfb6acf83c654e3c57679",
-    remote = "https://github.com/KhronosGroup/SPIRV-Cross.git",
-    shallow_since = "1660048855 +0200",
-)
-
-new_git_repository(
-    name = "opencv",
-    build_file = "//bzl/thirdpartybuild:opencv.BUILD",
-    commit = "70bbf17b133496bd7d54d034b0f94bd869e0e810",
-    remote = "https://github.com/opencv/opencv",
-    shallow_since = "1482497684 +0300",
-)
-
-new_git_repository(
-    name = "opencv_contrib",
-    build_file = "//bzl/thirdpartybuild:opencv_contrib.BUILD",
-    commit = "86342522b0eb2b16fa851c020cc4e0fef4e010b7",
-    remote = "https://github.com/opencv/opencv_contrib",
-    shallow_since = "1482491383 +0200",
-)
-
-new_git_repository(
-    name = "vectorclass",
-    build_file = "//bzl/thirdpartybuild:vectorclass.BUILD",
-    commit = "08959ebe6ea5d8317330b242e28ba0d2938ac52f",
-    remote = "https://github.com/vectorclass/version2",
-    shallow_since = "1659863902 +0200",
-)
-
-new_git_repository(
-    name = "s2geometry",
-    build_file = "//bzl/thirdpartybuild:s2geometry.BUILD",
-    commit = "c5055c076bd22281c67445d1df4f3225bfbf9925",
-    remote = "https://github.com/google/s2geometry.git",
-    shallow_since = "1648814009 +0200",
 )
 
 # Libwebsockets - Websocket C-API library
@@ -1486,241 +901,6 @@ new_git_repository(
     ],
     remote = "https://github.com/ocornut/imgui",
     shallow_since = "1621961154 +0200",
-)
-
-new_git_repository(
-    name = "imnodes",
-    build_file = "//bzl/thirdpartybuild:imnodes.BUILD",
-    commit = "0fbc7f1a2aab73b3ad4be86241bf3f4802bdb800",
-    remote = "https://github.com/Nelarius/imnodes",
-    shallow_since = "1626262086 +0300",
-)
-
-new_git_repository(
-    name = "implot",
-    build_file = "//bzl/thirdpartybuild:implot.BUILD",
-    commit = "6ee1559715fae9480fcaeb81f24d80a4d1e8c407",
-    remote = "https://github.com/epezent/implot",
-    shallow_since = "1634698866 -0700",
-)
-
-new_git_repository(
-    name = "capnproto",
-    build_file = "//bzl/thirdpartybuild:capnproto.BUILD",
-    commit = "c3c2655f6d6efeb93ae6b3ea718eecd00b72f5d0",
-    remote = "https://github.com/8thwall/capnproto.git",
-    shallow_since = "1699486035 -0800",
-)
-
-new_git_repository(
-    name = "capnproto_java",
-    build_file = "//bzl/thirdpartybuild:capnproto_java.BUILD",
-    commit = "be364f41c66b8c41484e0cb5bc25f726613cc04a",
-    remote = "https://github.com/dwrensha/capnproto-java",
-    shallow_since = "1488309561 -0500",
-)
-
-new_git_repository(
-    name = "capnproto_python",
-    build_file = "//bzl/thirdpartybuild:capnproto_python.BUILD",
-    commit = "b3ab9ab2a6eeb493ee2fe1d61a09a933828145c7",
-    remote = "https://github.com/jparyani/pycapnp.git",
-    shallow_since = "1501210794 -0700",
-)
-
-new_git_repository(
-    name = "libgit2",
-    build_file = "//bzl/thirdpartybuild:libgit2.BUILD",
-    commit = "78fde8cde56492d464575e3bf289056c8289cec8",
-    remote = "https://github.com/8thwall/libgit2.git",
-    shallow_since = "1731372343 -0800",
-)
-
-# Argument parsing library
-new_git_repository(
-    name = "cxxopts",
-    build_file = "//bzl/thirdpartybuild:cxxopts.BUILD",
-    commit = "302302b30839505703d37fb82f536c53cf9172fa",
-    remote = "https://github.com/jarro2783/cxxopts.git",
-    shallow_since = "1596495594 +1000",
-)
-
-new_git_repository(
-    name = "kissfftlib",
-    build_file = "//bzl/thirdpartybuild:kissfft.BUILD",
-    commit = "8f47a67f595a6641c566087bf5277034be64f24d",
-    remote = "https://github.com/mborgerding/kissfft.git",
-    shallow_since = "1612920557 -0500",
-)
-
-new_git_repository(
-    name = "ceres",
-    build_file = "//bzl/thirdpartybuild:ceres.BUILD",
-    commit = "2b32b321242b32f6364108694e0069f87e56326c",
-    remote = "https://github.com/ceres-solver/ceres-solver",
-    shallow_since = "1613587123 +0000",
-)
-
-new_git_repository(
-    name = "ceres2",
-    build_file = "//bzl/thirdpartybuild:ceres2.BUILD",
-    commit = "fd6197ce0ef5794bba455fe6f907dcdabcf624eb",
-    remote = "https://github.com/ceres-solver/ceres-solver",
-    shallow_since = "1686411471 +0200",
-)
-
-new_git_repository(
-    name = "png",
-    build_file = "//bzl/thirdpartybuild:png.BUILD",
-    commit = "eddf9023206dc40974c26f589ee2ad63a4227a1e",
-    remote = "https://github.com/glennrp/libpng.git",
-    shallow_since = "1543674960 -0500",
-)
-
-new_git_repository(
-    name = "draco",
-    build_file = "//bzl/thirdpartybuild:draco.BUILD",
-    commit = "bd1e8de7dd0596c2cbe5929cbe1f5d2257cd33db",
-    remote = "https://github.com/google/draco.git",
-    shallow_since = "1645135565 -0800",
-)
-
-http_archive(
-    name = "org_freetype_freetype2",
-    build_file = "//bzl/thirdpartybuild:freetype2.BUILD",
-    sha256 = "e09aa914e4f7a5d723ac381420949c55c0b90b15744adce5d1406046022186ab",
-    strip_prefix = "freetype-2.10.2",
-    urls = [
-        "http://download.savannah.gnu.org/releases/freetype/freetype-2.10.2.tar.gz",
-        "https://sourceforge.net/projects/freetype/files/freetype2/2.10.2/freetype-2.10.2.tar.gz",
-    ],
-)
-
-http_archive(
-    name = "robolectric",
-    build_file = "//bzl/thirdpartybuild:robolectric.BUILD",
-    sha256 = "61802f241e410daf53994a8ea9c14777f7f6350b8a92b1461489fe0618ff41a1",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/roboelectric/robolectric-3.3.zip",
-)
-
-new_git_repository(
-    name = "tinygltf",
-    build_file = "//bzl/thirdpartybuild:tinygltf.BUILD",
-    commit = "e0b393c6958c0a7cbe134a240fad7915aae53db3",
-    remote = "https://github.com/syoyo/tinygltf.git",
-    shallow_since = "1694518115 +0900",
-)
-
-new_git_repository(
-    name = "androidmdnsresponder",
-    build_file = "//bzl/thirdpartybuild:androidmdnsresponder.BUILD",
-    commit = "85d33e8312069bc5b3d0e307589e0919922e687c",
-    remote = "https://android.googlesource.com/platform/external/mdnsresponder",
-    shallow_since = "1507706791 +0000",
-)
-
-http_archive(
-    name = "mdnsresponder",
-    build_file = "//bzl/thirdpartybuild:mdnsresponder.BUILD",
-    patches = [
-        "@the8thwall//third_party/mdnsresponder:dllmain.c.patch",
-    ],
-    sha256 = "75d66beadae8a64a5d30986afe45259b73b03bc6f4cb1b64acca7079cf11e056",
-    strip_prefix = "mDNSResponder-mDNSResponder-765.50.9",
-    url = "https://opensource.apple.com/tarballs/mDNSResponder/mDNSResponder-765.50.9.tar.gz",
-)
-
-new_git_repository(
-    name = "opus",
-    build_file = "//bzl/thirdpartybuild:opus.BUILD",
-    commit = "d633f523e36e3b6d01cc6d57386458d770d618be",
-    remote = "https://github.com/xiph/opus.git",
-    shallow_since = "1611443214 -0800",
-)
-
-new_git_repository(
-    name = "libwebm",
-    build_file = "//bzl/thirdpartybuild:libwebm.BUILD",
-    commit = "485fb67b324aec5298765e899dc054459d3946e5",
-    remote = "https://chromium.googlesource.com/webm/libwebm",
-    shallow_since = "1606261220 +0000",
-)
-
-new_git_repository(
-    name = "libvpx",
-    build_file = "//bzl/thirdpartybuild:libvpx.BUILD",
-    commit = "0d8354669ac525a27c78bc8c761e98e0f8c3905c",
-    patches = [
-        "@the8thwall//third_party/libvpx:config.patch",
-    ],
-    remote = "https://chromium.googlesource.com/webm/libvpx",
-    shallow_since = "1612419145 -0800",
-)
-
-new_git_repository(
-    name = "openh264",
-    build_file = "//bzl/thirdpartybuild:openh264.BUILD",
-    commit = "22a46624f3b5c88e017ae5fb78f7a66e06bfccb9",
-    remote = "https://github.com/8thwall/openh264",
-    shallow_since = "1612314198 -0800",
-)
-
-new_git_repository(
-    name = "libmp4v2",
-    build_file = "//bzl/thirdpartybuild:libmp4v2.BUILD",
-    commit = "b0e3019fb301362dedd376ba3f4fb7263b277c11",
-    remote = "https://github.com/8thwall/libmp4v2",
-    shallow_since = "1589395781 -0700",
-)
-
-new_git_repository(
-    name = "fdkaac",
-    build_file = "//bzl/thirdpartybuild:fdkaac.BUILD",
-    commit = "573e93e4d0d08127dd3b2297a0ce52221527d90a",
-    patches = [
-        "@the8thwall//third_party/fdk-aac:FDK_archdef.h.patch",
-        "@the8thwall//third_party/fdk-aac:FDK_lpp_tran.cpp.patch",
-    ],
-    remote = "https://github.com/mstorsjo/fdk-aac",
-    shallow_since = "1629788404 +0300",
-)
-
-new_git_repository(
-    name = "vlfeat",
-    build_file = "//bzl/thirdpartybuild:vlfeat.BUILD",
-    commit = "1b9075fc42fe54b42f0e937f8b9a230d8e2c7701",
-    remote = "https://github.com/vlfeat/vlfeat",
-    shallow_since = "1515711330 +0000",
-)
-
-git_repository(
-    name = "fmt",
-    commit = "a33701196adfad74917046096bf5a2aa0ab0bb50",
-    patch_cmds = [
-        "mv support/bazel/.bazelrc .bazelrc",
-        "mv support/bazel/.bazelversion .bazelversion",
-        "mv support/bazel/BUILD.bazel BUILD.bazel",
-        "mv support/bazel/WORKSPACE.bazel WORKSPACE.bazel",
-    ],
-    # Windows-related patch commands are only needed in the case MSYS2 is not installed.
-    # More details about the installation process of MSYS2 on Windows systems can be found here:
-    # https://docs.bazel.build/versions/main/install-windows.html#installing-compilers-and-language-runtimes
-    # Even if MSYS2 is installed the Windows related patch commands can still be used.
-    patch_cmds_win = [
-        "Move-Item -Path support/bazel/.bazelrc -Destination .bazelrc",
-        "Move-Item -Path support/bazel/.bazelversion -Destination .bazelversion",
-        "Move-Item -Path support/bazel/BUILD.bazel -Destination BUILD.bazel",
-        "Move-Item -Path support/bazel/WORKSPACE.bazel -Destination WORKSPACE.bazel",
-    ],
-    remote = "https://github.com/fmtlib/fmt",
-)
-
-new_git_repository(
-    name = "moodycamel",
-    build_file = "//bzl/thirdpartybuild:concurrentqueue.BUILD",
-    commit = "79cec4c3bf1ca23ea4a03adfcd3c2c3659684dd2",
-    remote = "https://github.com/cameron314/concurrentqueue",
-    shallow_since = "1580387311 -0500",
 )
 
 new_git_repository(
@@ -1843,48 +1023,12 @@ load("@com_google_protobuf//:protobuf_deps.bzl", nia_protobuf_deps = "protobuf_d
 
 nia_protobuf_deps()
 
-niantic_maybe(
-    http_archive,
-    name = "torch",
-    build_file = "//bzl/thirdpartybuild:torch.BUILD",
-    sha256 = "6b64703b360f06f85d36e2fffb1dd3659a14a3a15d78f43acfd6c9eea206bf46",
-    strip_prefix = "libtorch",
-    urls = [
-        "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.1.1%2Bcu118.zip",
-    ],
-)
-
 # Downloaded from https://gitlab.com/<REMOVED_BEFORE_OPEN_SOURCING>/repos/legacy/niantic-ar/3rd-party/angle/-/tags
 http_archive(
     name = "angle",
     sha256 = "42c4d922e2b78732c2145445907d72f6cf551a9a3ea378528ad3a09704e3b3a4",
     strip_prefix = "angle-nia-5943-p3",
     url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/angle/angle-nia-5943-p3.tar.gz",
-)
-
-# Downloaded from https://developers.meta.com/horizon/downloads/package/oculus-platform-sdk
-http_archive(
-    name = "oculus-platform-sdk",
-    build_file = "//bzl/thirdpartybuild:oculus-platform-sdk.BUILD",
-    sha256 = "dee1b5b1e33fc4ac52358d2a83175f51d7f569212fd26d016ae851cbdc9a3468",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/ovr_platform_sdk/ovr_platform_sdk_69.0.zip",
-)
-
-# C++ wrapper classes for Node-API.
-http_archive(
-    name = "node-addon-api",
-    build_file = "//bzl/thirdpartybuild:node-addon-api.BUILD",
-    sha256 = "10223967fb13567b271639b530c6b13276bced48b57eea9d7c3e172f72cfee92",
-    strip_prefix = "node-addon-api-7.0.0",
-    url = "https://github.com/nodejs/node-addon-api/archive/refs/tags/v7.0.0.zip",
-)
-
-http_archive(
-    name = "addon-tools-raub",
-    build_file = "//bzl/thirdpartybuild:addon-tools-raub.BUILD",
-    sha256 = "961159c82a24afc3347e2f593143394aa6d2b4be30f6f85c9bb742da03f4ce4c",
-    strip_prefix = "addon-tools-raub-7.2.0",
-    url = "https://github.com/node-3d/addon-tools-raub/archive/refs/tags/7.2.0.zip",
 )
 
 http_archive(
@@ -1908,13 +1052,6 @@ new_git_repository(
 )
 
 http_archive(
-    name = "org_brotli",
-    sha256 = "84a9a68ada813a59db94d83ea10c54155f1d34399baf377842ff3ab9b3b3256e",
-    strip_prefix = "brotli-3914999fcc1fda92e750ef9190aa6db9bf7bdb07",
-    url = "https://github.com/google/brotli/archive/3914999fcc1fda92e750ef9190aa6db9bf7bdb07.zip",
-)
-
-http_archive(
     name = "node",
     patch_args = ["-p1"],
     patches = [
@@ -1923,153 +1060,4 @@ http_archive(
     sha256 = "f0d6ac768686664973353743b78334a25ca5e3dd0444b53de14b2eda98b542f1",
     strip_prefix = "node-nia-v20.6.1-p11",
     url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/node/node-nia-v20.6.1-p11.tar",
-)
-
-new_git_repository(
-    name = "flecs",
-    build_file = "//bzl/thirdpartybuild:flecs.BUILD",
-    commit = "bf9ec9f8aecd987bee63e6c0af4164c7be14b42f",  # https://github.com/SanderMertens/flecs/releases/tag/v4.0.2
-    remote = "https://github.com/SanderMertens/flecs.git",
-    shallow_since = "1727187792 -0700",
-)
-
-http_archive(
-    name = "spdlog",
-    build_file = "//bzl/thirdpartybuild:spdlog.BUILD",
-    patch_args = ["-p1"],
-    patches = [
-        "@the8thwall//:third_party/spdlog/public_logger.patch",
-    ],
-    sha256 = "4dccf2d10f410c1e2feaff89966bfc49a1abb29ef6f08246335b110e001e09a9",
-    strip_prefix = "spdlog-1.12.0",
-    url = "https://github.com/gabime/spdlog/archive/refs/tags/v1.12.0.tar.gz",
-)
-
-new_git_repository(
-    name = "nanoflann",
-    build_file = "//bzl/thirdpartybuild:nanoflann.BUILD",
-    commit = "37b31cb554688a51a1f773420aa1b2c94c99237b",  # v1.5.3
-    remote = "https://github.com/jlblancoc/nanoflann.git",
-)
-
-new_git_repository(
-    name = "bullet3",
-    build_file = "//bzl/thirdpartybuild:bullet3.BUILD",
-    commit = "6bb8d1123d8a55d407b19fd3357c724d0f5c9d3c",
-    remote = "https://github.com/bulletphysics/bullet3.git",
-    shallow_since = "1701210212 -0800",
-)
-
-new_git_repository(
-    name = "joltphysics",
-    build_file = "//bzl/thirdpartybuild:joltphysics.BUILD",
-    commit = "0373ec0dd762e4bc2f6acdb08371ee84fa23c6db",  #  v5.3.0
-    remote = "https://github.com/jrouwe/JoltPhysics.git",
-    shallow_since = "1742071981 +0100",
-)
-
-new_git_repository(
-    name = "sophus",
-    build_file = "//bzl/thirdpartybuild:sophus.BUILD",
-    commit = "de0f8d3d92bf776271e16de56d1803940ebccab9",  # 1.22.10
-    remote = "https://github.com/strasdat/Sophus.git",
-    shallow_since = "1675598033 -0800",
-)
-
-new_git_repository(
-    name = "webgl-conformance",
-    build_file = "//bzl/thirdpartybuild:webgl-conformance.BUILD",
-    commit = "8a1bf5671d342458bc258ad8a575ad269292c361",  # 7/10/2024
-    remote = "https://github.com/KhronosGroup/WebGL.git",
-)
-
-new_git_repository(
-    name = "openxr",
-    build_file = "//bzl/thirdpartybuild:openxr.BUILD",
-    commit = "f90488c4fb1537f4256d09d4a4d3ad5543ebaf24",
-    remote = "https://github.com/KhronosGroup/OpenXR-SDK.git",
-    shallow_since = "1718057169 -0500",
-)
-
-http_file(
-    name = "android-manifest-merger",
-    sha256 = "4e06d2f8b545741847495f4cfdd14eb8ccf42eb21241e8be0387759ce074c415",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/android-manifest-merger/android-manifest-merger-31.5.2.jar",
-)
-
-AAPT2_VERSION = "8.10.0-rc02-12782657"
-
-http_file(
-    name = "android-aapt2-linux-jar",
-    sha256 = "8a6e4d59a2e51c117b4a54ac2853f6f62c7effa4c54bbbc5cdf531ba215e909e",
-    url = "https://dl.google.com/android/maven2/com/android/tools/build/aapt2/{}/aapt2-{}-linux.jar".format(
-        AAPT2_VERSION,
-        AAPT2_VERSION,
-    ),
-)
-
-# TODO(lreyna): Bazelify the deps from https://github.com/indygreg/apple-platform-rs, so we can
-# build the `rcodesign` binary ourselves.
-http_archive(
-    name = "apple-codesign-linux-x86_64",
-    build_file_content = """
-filegroup(
-    name = "rcodesign_bin",
-    srcs = ["rcodesign"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002",
-    strip_prefix = "apple-codesign-0.29.0-x86_64-unknown-linux-musl",
-    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz",
-)
-
-http_archive(
-    name = "apple-codesign-osx-arm64",
-    build_file_content = """
-filegroup(
-    name = "rcodesign_bin",
-    srcs = ["rcodesign"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "d1a532150adaf90048260d76359261aa716abafc45c53c5dc18845029184334a",
-    strip_prefix = "apple-codesign-0.29.0-aarch64-apple-darwin",
-    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-aarch64-apple-darwin.tar.gz",
-)
-
-http_archive(
-    name = "apple-codesign-osx-x86_64",
-    build_file_content = """
-filegroup(
-    name = "rcodesign_bin",
-    srcs = ["rcodesign"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "14ef11bedd51a8d95eafd767939ae96d5900e5a61511bef75bb21db6e7c74140",
-    strip_prefix = "apple-codesign-0.29.0-x86_64-apple-darwin",
-    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-x86_64-apple-darwin.tar.gz",
-)
-
-npm_package(
-    name = "npm-tauri-app",
-    package = "//apps/client/exploratory/tauri-app:package.json",
-    package_lock = "//apps/client/exploratory/tauri-app:package-lock.json",
-)
-
-http_archive(
-    name = "itms-transporter-macosx-universal",
-    build_file = "//bzl/thirdpartybuild:itms-transporter.BUILD",
-    sha256 = "719b9152088f56d5bcb7b1bb61238a19e20823968e12ce33b084e9d25be43b7c",
-    strip_prefix = "itms-transporter-4.1.0-macosx-universal",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/itms-transporter/itms-transporter-4.1.0-macosx-universal.tgz",
-)
-
-http_archive(
-    name = "itms-transporter-linux-x86_64",
-    build_file = "//bzl/thirdpartybuild:itms-transporter.BUILD",
-    sha256 = "559edac54cc020a7ef13d49f7034b942a4d4c7da93582c81eb0d7b8aec5de52a",
-    strip_prefix = "itms-transporter-4.1.0-linux-x86_64",
-    url = "https://huggingface.co/datasets/8thWall/bazel-dependencies/resolve/main/itms-transporter/itms-transporter-4.1.0-linux-x86_64.tgz",
 )
