@@ -324,7 +324,18 @@ void processPipelineData(PipelineData &p) {
     data()->gl->addNextDrawRoi(roi);
   }
   if (!data()->detectionImages_.empty()) {
-    data()->gl->addNextDrawHiResScans(intrinsics, {0.0f, 0.0f});
+    // The hi-res scans look for targets small in the frame and are most of the pyramid draw
+    // while searching. window.__arHiResScanEvery (default 1) adds them on every Nth frame only.
+    // window.__arHiResScanCount (default all four) caps how many: coarse zooms first, so a
+    // smaller count gives up the farthest distances first.
+    int every = EM_ASM_INT({ return (window.__arHiResScanEvery | 0) || 1; });
+    int count = EM_ASM_INT({
+      const n = window.__arHiResScanCount;
+      return n === undefined || n === null ? 1 << 20 : (n | 0);
+    });
+    if ((every <= 1 || data()->frameTick % every == 0) && count > 0) {
+      data()->gl->addNextDrawHiResScans(intrinsics, {0.0f, 0.0f}, count);
+    }
   }
 
   p.realityResponse = ConstRootMessage<RealityResponse>(response);
@@ -445,6 +456,14 @@ DetectionImageLoader newImageLoader(
   }
   im.initialize(
     data()->glShader.get(), imageTargetMetadataReader, Intrinsics::getCameraIntrinsics(m));
+  // Read the target's pyramid back through a pixel buffer, as the camera's is: the target is
+  // drawn in one animation frame and its features extracted in the next, so the read in between
+  // need not wait for the GPU. The synchronous read it replaces costs 20-70ms a target on an
+  // iPhone 17 Pro.
+  int useWebGl2 = EM_ASM_INT({ return window._c8.useWebGl2 ? 1 : 0; });
+  if (useWebGl2 && !data()->disablePixelBuffer) {
+    im.gl().enableWebGl2PixelBuffer();
+  }
   return im;
 }
 
@@ -473,13 +492,27 @@ void c8EmAsm_cancelProcessNewDetectionImageTexture() {
   }
 }
 
+// Loading a target is two halves. The first draws its pyramid on the GPU and, with a pixel
+// buffer, starts the read-back; the second reads the result and extracts the features. Called
+// from consecutive animation frames the read never waits for the GPU; called back to back it
+// does, which is what c8EmAsm_processNewDetectionImageTexture still offers.
 C8_PUBLIC
-void c8EmAsm_processNewDetectionImageTexture() {
-  ScopeTimer rt("c8EmAsm_processNewDetectionImageTexture");
+void c8EmAsm_beginProcessNewDetectionImageTexture() {
+  ScopeTimer rt("c8EmAsm_beginProcessNewDetectionImageTexture");
+  if (data()->imLoaders_.empty()) {
+    return;
+  }
+  data()->imLoaders_.front().processGpu();
+}
+
+C8_PUBLIC
+void c8EmAsm_finishProcessNewDetectionImageTexture() {
+  ScopeTimer rt("c8EmAsm_finishProcessNewDetectionImageTexture");
+  if (data()->imLoaders_.empty()) {
+    return;
+  }
   auto &im = data()->imLoaders_.front();
   String name = im.name();
-  // TODO(nb): spread processing of queue entries across multiple animation frames.
-  im.processGpu();
   im.readDataToCpu();
   data()->detectionImages_.insert(std::make_pair(name, im.extractFeatures()));
   data()->imLoaders_.pop_front();
@@ -497,6 +530,13 @@ void c8EmAsm_processNewDetectionImageTexture() {
       data()->lastProcessedCurvyGeometry_.bytes().begin(),
       data()->lastProcessedCurvyGeometry_.bytes().size());
   }
+}
+
+C8_PUBLIC
+void c8EmAsm_processNewDetectionImageTexture() {
+  ScopeTimer rt("c8EmAsm_processNewDetectionImageTexture");
+  c8EmAsm_beginProcessNewDetectionImageTexture();
+  c8EmAsm_finishProcessNewDetectionImageTexture();
 }
 
 C8_PUBLIC

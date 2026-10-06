@@ -795,6 +795,59 @@ const XrControllerFactory = singleton((
     }
   }
 
+  // A target whose pyramid has been drawn but not yet read back and extracted: the second
+  // half of its load, due one animation frame after the first.
+  let pendingTargetLoad_: {
+    batchLoadId: number
+    imageTarget: ImageTargetData
+    framework: FrameworkHandle
+  } | null = null
+
+  const finishPendingTargetLoad = () => {
+    const pending = pendingTargetLoad_
+    if (!pending) {
+      return
+    }
+    pendingTargetLoad_ = null
+    const {batchLoadId, imageTarget, framework} = pending
+    if (batchLoadId !== imageBatchLoadId_) {
+      // A new batch has started. The loader was added, so signal that it will not be used.
+      scc_._c8EmAsm_cancelProcessNewDetectionImageTexture()
+      return
+    }
+
+    scc_._c8EmAsm_finishProcessNewDetectionImageTexture()
+    currentTargetUrls_.push(imageTarget.imagePath)
+
+    const {properties} = imageTarget
+    const itMetadata = targetMetadata_.find(o => o.name === imageTarget.name)
+    if (imageTarget.type === ImageTargetType.CYLINDER.xrhomeName ||
+      imageTarget.type === ImageTargetType.CONICAL.xrhomeName) {
+      const byteBuffer = scc_.HEAPU8.subarray(
+        window._c8.lastProcessedCurvyGeometry,
+        window._c8.lastProcessedCurvyGeometry + window._c8.lastProcessedCurvyGeometrySize
+      )
+      const curvyGeometryMessage = new capnp.Message(byteBuffer, false).getRoot(CurvyGeometry)
+
+      itMetadata.geometry = {
+        height: curvyGeometryMessage.getHeight(),
+        radiusTop: curvyGeometryMessage.getTopRadius(),
+        radiusBottom: curvyGeometryMessage.getBottomRadius(),
+        arcLengthRadians: curvyGeometryMessage.getArcLengthRadians(),
+        arcStartRadians: curvyGeometryMessage.getArcStartRadians(),
+      }
+    } else {
+      itMetadata.geometry = {
+        scaledWidth: properties.isRotated ? 1.0 : (properties.width / properties.height),
+        scaledHeight: properties.isRotated ? (properties.width / properties.height) : 1.0,
+      }
+    }
+
+    if (framework && imagesToLoad_.length === 0) {
+      framework.dispatchEvent('imagescanning', {imageTargets: targetMetadata_})
+    }
+  }
+
   const readImageDetectionTarget = (
     computeCtx: RenderContext,
     img: HTMLImageElement,
@@ -819,6 +872,9 @@ const XrControllerFactory = singleton((
       )
       return
     }
+
+    // The previous target's second half, before this one's loader joins the queue behind it.
+    finishPendingTargetLoad()
     const iw = img.naturalWidth
     const ih = img.naturalHeight
     const message = new capnp.Message()
@@ -887,48 +943,13 @@ const XrControllerFactory = singleton((
       img
     )
 
-    window.requestAnimationFrame(() => {
-      if (batchLoadId !== imageBatchLoadId_) {
-        // If a new batch of loading has started, end the current load and don't load this
-        // imgId again.
-        imagesToLoad_.shift()
-
-        // We have already added the loader, so we need to signal that we will not use it.
-        scc_._c8EmAsm_cancelProcessNewDetectionImageTexture()
-        return
-      }
-
-      scc_._c8EmAsm_processNewDetectionImageTexture()
-      currentTargetUrls_.push(imageTarget.imagePath)
-      imagesToLoad_.shift()
-
-      const itMetadata = targetMetadata_.find(o => o.name === imageTarget.name)
-      if (imageTarget.type === ImageTargetType.CYLINDER.xrhomeName ||
-        imageTarget.type === ImageTargetType.CONICAL.xrhomeName) {
-        const byteBuffer = scc_.HEAPU8.subarray(
-          window._c8.lastProcessedCurvyGeometry,
-          window._c8.lastProcessedCurvyGeometry + window._c8.lastProcessedCurvyGeometrySize
-        )
-        const curvyGeometryMessage = new capnp.Message(byteBuffer, false).getRoot(CurvyGeometry)
-
-        itMetadata.geometry = {
-          height: curvyGeometryMessage.getHeight(),
-          radiusTop: curvyGeometryMessage.getTopRadius(),
-          radiusBottom: curvyGeometryMessage.getBottomRadius(),
-          arcLengthRadians: curvyGeometryMessage.getArcLengthRadians(),
-          arcStartRadians: curvyGeometryMessage.getArcStartRadians(),
-        }
-      } else {
-        itMetadata.geometry = {
-          scaledWidth: properties.isRotated ? 1.0 : (properties.width / properties.height),
-          scaledHeight: properties.isRotated ? (properties.width / properties.height) : 1.0,
-        }
-      }
-
-      if (framework && imagesToLoad_.length === 0) {
-        framework.dispatchEvent('imagescanning', {imageTargets: targetMetadata_})
-      }
-    })
+    // First half, now: draw the pyramid and start its read-back. The second half runs next
+    // frame (finishPendingTargetLoad), when the GPU is done, and the next target's first half
+    // runs in that same frame — one animation frame per target, and no read that waits.
+    scc_._c8EmAsm_beginProcessNewDetectionImageTexture()
+    imagesToLoad_.shift()
+    pendingTargetLoad_ = {batchLoadId, imageTarget, framework}
+    window.requestAnimationFrame(finishPendingTargetLoad)
   }
 
   let loadedComputeCtx = null
@@ -1005,8 +1026,13 @@ const XrControllerFactory = singleton((
     scc_._c8EmAsm_initDeviceInfo(ptr, buffer.byteLength)
     scc_._free(ptr)
 
-    // TODO(paris): Re-enable pixel buffer on iOS once iOS 15 + pixel buffer bug is resolved.
-    scc_._c8EmAsm_setDisablePixelBuffer(XrDeviceFactory().deviceEstimate().os === 'iOS')
+    // iOS 15 could not read a pixel buffer back. iOS 16 and later can, and from the iPhone 17
+    // Pro (A19) the synchronous read the fallback takes costs 20-70ms a frame — the frame rate.
+    const estimate = XrDeviceFactory().deviceEstimate()
+    const iosMajor = parseInt(estimate.osVersion, 10)
+    scc_._c8EmAsm_setDisablePixelBuffer(
+      estimate.os === 'iOS' && !(Number.isFinite(iosMajor) && iosMajor >= 16)
+    )
     scc_._c8EmAsm_engineInit(videoWidth, videoHeight, rotation)
 
     // Kept to be used when app resources is available

@@ -411,33 +411,40 @@ const draw = (input: DrawParams): WebGLTexture => {
     hasVA ? GLctx.VERTEX_ARRAY_BINDING : VAext.VERTEX_ARRAY_BINDING_OES
   )
 
-  // Cache the current state of the opengl state machine to restore it later.
-  const restoreProgram = GLctx.getParameter(GLctx.CURRENT_PROGRAM)
-  const restoreFramebuffer = framebuffer ? GLctx.getParameter(GLctx.FRAMEBUFFER_BINDING) : null
-  const restoreViewport = GLctx.getParameter(GLctx.VIEWPORT)
-  const restoreDepth = GLctx.isEnabled(GLctx.DEPTH_TEST)
-  const restoreBlend = GLctx.isEnabled(GLctx.BLEND)
-  const restoreBlendSrcRGB = GLctx.getParameter(GLctx.BLEND_SRC_RGB)
-  const restoreBlendDstRGB = GLctx.getParameter(GLctx.BLEND_DST_RGB)
-  const restoreBlendSrcAlpha = GLctx.getParameter(GLctx.BLEND_SRC_ALPHA)
-  const restoreBlendDstAlpha = GLctx.getParameter(GLctx.BLEND_DST_ALPHA)
+  // Cache the current state of the opengl state machine to restore it later — unless the page
+  // has said it will not need it back (window.__arSkipGlStateRestore). Every getParameter here is
+  // a synchronous round trip to the GPU process in WebKit, a dozen a frame, and a renderer that
+  // resets its own state (three.js resetState()) needs none of them.
+  const keepState = (window as unknown as {__arSkipGlStateRestore?: boolean})
+    .__arSkipGlStateRestore !== true
+  const restoreProgram = keepState ? GLctx.getParameter(GLctx.CURRENT_PROGRAM) : null
+  const restoreFramebuffer =
+    keepState && framebuffer ? GLctx.getParameter(GLctx.FRAMEBUFFER_BINDING) : null
+  const restoreViewport = keepState ? GLctx.getParameter(GLctx.VIEWPORT) : null
+  // Without the state kept, both read as enabled so that the draw below switches them off.
+  const restoreDepth = keepState ? GLctx.isEnabled(GLctx.DEPTH_TEST) : true
+  const restoreBlend = keepState ? GLctx.isEnabled(GLctx.BLEND) : true
+  const restoreBlendSrcRGB = keepState ? GLctx.getParameter(GLctx.BLEND_SRC_RGB) : null
+  const restoreBlendDstRGB = keepState ? GLctx.getParameter(GLctx.BLEND_DST_RGB) : null
+  const restoreBlendSrcAlpha = keepState ? GLctx.getParameter(GLctx.BLEND_SRC_ALPHA) : null
+  const restoreBlendDstAlpha = keepState ? GLctx.getParameter(GLctx.BLEND_DST_ALPHA) : null
   // First we get the active texture unit.
-  const restoreActive = GLctx.getParameter(GLctx.ACTIVE_TEXTURE)
-  const restoreTex = GLctx.getParameter(GLctx.TEXTURE_BINDING_2D)
+  const restoreActive = keepState ? GLctx.getParameter(GLctx.ACTIVE_TEXTURE) : GLctx.TEXTURE0
+  const restoreTex = keepState ? GLctx.getParameter(GLctx.TEXTURE_BINDING_2D) : null
   // If the active texture unit was not 0 then save texture at unit 0 because we'll overwrite it.
   let restoreTex0 = null
-  if (restoreActive !== GLctx.TEXTURE0) {
+  if (keepState && restoreActive !== GLctx.TEXTURE0) {
     GLctx.activeTexture(GLctx.TEXTURE0)
     restoreTex0 = GLctx.getParameter(GLctx.TEXTURE_BINDING_2D)
   }
   // If the active texture unit was not 1 then save texture at unit 1 because we'll overwrite it.
   let restoreTex1 = null
-  if (restoreActive !== GLctx.TEXTURE1) {
+  if (keepState && restoreActive !== GLctx.TEXTURE1) {
     GLctx.activeTexture(GLctx.TEXTURE1)
     restoreTex1 = GLctx.getParameter(GLctx.TEXTURE_BINDING_2D)
   }
-  const restoreFrontFace = GLctx.getParameter(GLctx.FRONT_FACE)
-  const restoreVertexArray = vertexArrayBinding()
+  const restoreFrontFace = keepState ? GLctx.getParameter(GLctx.FRONT_FACE) : null
+  const restoreVertexArray = keepState ? vertexArrayBinding() : null
 
   // Set the active shader.
   GLctx.useProgram(shader)
@@ -514,6 +521,19 @@ const draw = (input: DrawParams): WebGLTexture => {
 
       GLctx.drawElements(GLctx.TRIANGLES, 6, GLctx.UNSIGNED_SHORT, 0)
     })
+  }
+
+  if (!keepState) {
+    // Drawn into a texture: leave the default framebuffer bound for whoever draws next, as the
+    // restore below would have. Without this the on-screen draw that follows lands in the texture.
+    if (framebuffer) {
+      GLctx.bindFramebuffer(GLctx.FRAMEBUFFER, null)
+    }
+    // Make sure nothing went wrong.
+    if (verbose) {
+      checkGLError({GLctx, msg: 'GLRenderer.render'})
+    }
+    return texture
   }
 
   GLctx.finish()

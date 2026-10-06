@@ -236,7 +236,7 @@ void GlRealityFrame::initialize(
 void GlRealityFrame::enableWebGl2PixelBuffer() {
 #ifdef JAVASCRIPT
   usePixelBuffer_ = true;
-  glGenBuffers(1, &pixelBuffer_);
+  glGenBuffers(1, &pixelBuffer_.id);
   EM_ASM_(
     {
       Module.ctx.bindBuffer(Module.ctx.PIXEL_PACK_BUFFER, GL.buffers[$0]);
@@ -244,7 +244,7 @@ void GlRealityFrame::enableWebGl2PixelBuffer() {
       Module.ctx.bufferData(Module.ctx.PIXEL_PACK_BUFFER, bufferInit, Module.ctx.DYNAMIC_READ, 0);
       Module.ctx.bindBuffer(Module.ctx.PIXEL_PACK_BUFFER, null);
     },
-    pixelBuffer_,
+    pixelBuffer_.id,
     outputWidth_ * outputHeight_ * 4);
 #else
   C8_THROW("Using pixel buffer outside of JavaScript not implemented");
@@ -491,27 +491,19 @@ void GlRealityFrame::readPixels() {
 
 #ifdef JAVASCRIPT
   if (usePixelBuffer_) {
-    EM_ASM_({
-      if (Module.ctx.fenceSync && Module.ctx.__glSync_) {
-        // NOTE(christoph): This was causing a lag too frequently so we will continue depending on
-        // Chrome to guard the getBufferSubData itself.
-        // Sometimes chrome seems to spin forever here, so add a 300ms timeout as a safety valve.
-        // Module.ctx.__then_ = Date.now() + 300;
-
-        // Spin and wait on the fence to prevent chrome from printing a warning to the console
-        // 'READ-usage buffer was read back without waiting on a fence.'
-        // while (Module.ctx.clientWaitSync(Module.ctx.__glSync_, 0, 0) ==
-        // Module.ctx.TIMEOUT_EXPIRED
-        //    && Date.now() < Module.ctx.__then_) {
-        //   // continue
-        // }
-
-        Module.ctx.clientWaitSync(Module.ctx.__glSync_, 0, 0);
-        Module.ctx.deleteSync(Module.ctx.__glSync_);
-        Module.ctx.__glSync_ = undefined;
-        // Module.ctx.__then_ = undefined;
-      }
-    });
+    EM_ASM_(
+      {
+        const syncs = Module.ctx.__glSyncs_;
+        if (Module.ctx.fenceSync && syncs && syncs[$0]) {
+          // NOTE(christoph): This was causing a lag too frequently so we will continue depending
+          // on Chrome to guard the getBufferSubData itself; the zero-timeout wait only keeps
+          // Chrome from warning 'READ-usage buffer was read back without waiting on a fence.'
+          Module.ctx.clientWaitSync(syncs[$0], 0, 0);
+          Module.ctx.deleteSync(syncs[$0]);
+          delete syncs[$0];
+        }
+      },
+      pixelBuffer_.id);
   }
 #endif
 
@@ -532,7 +524,7 @@ void GlRealityFrame::readPixels() {
       },
       o.pixels(),
       o.rows() * o.rowBytes(),
-      pixelBuffer_);
+      pixelBuffer_.id);
 #else
     C8_THROW("Using pixel buffer outside of JavaScript not implemented");
 #endif
@@ -590,7 +582,7 @@ void GlRealityFrame::drawTexture(GlTexture cameraTexture) {
         Module.ctx.readPixels(0, 0, $1, $2, Module.ctx.RGBA, Module.ctx.UNSIGNED_BYTE, 0);
         Module.ctx.bindBuffer(Module.ctx.PIXEL_PACK_BUFFER, null);
       },
-      pixelBuffer_,
+      pixelBuffer_.id,
       outputWidth_,
       outputHeight_);
 #else
@@ -600,11 +592,17 @@ void GlRealityFrame::drawTexture(GlTexture cameraTexture) {
 
 #ifdef JAVASCRIPT
   if (usePixelBuffer_) {
-    EM_ASM_({
-      if (Module.ctx.fenceSync) {
-        Module.ctx.__glSync_ = Module.ctx.fenceSync(Module.ctx.SYNC_GPU_COMMANDS_COMPLETE, 0);
-      }
-    });
+    EM_ASM_(
+      {
+        if (Module.ctx.fenceSync) {
+          const syncs = Module.ctx.__glSyncs_ || (Module.ctx.__glSyncs_ = {});
+          if (syncs[$0]) {
+            Module.ctx.deleteSync(syncs[$0]);
+          }
+          syncs[$0] = Module.ctx.fenceSync(Module.ctx.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        }
+      },
+      pixelBuffer_.id);
   }
 #endif
 
@@ -681,9 +679,10 @@ void GlRealityFrame::draw(
   }
 }
 
-void GlRealityFrame::addNextDrawHiResScans(c8_PixelPinholeCameraModel intrinsics, HPoint2 scanRay) {
+void GlRealityFrame::addNextDrawHiResScans(
+  c8_PixelPinholeCameraModel intrinsics, HPoint2 scanRay, int maxScans) {
   int startAt = nextRois_.size();
-  for (int i = startAt; i < roiLayouts_.size(); ++i) {
+  for (int i = startAt; i < roiLayouts_.size() && (i - startAt) < maxScans; ++i) {
     int pyrscale = (i - startAt) + 1;
     float scale = 1.0f - std::pow(1.44f, 2 + pyrscale);
     auto roi = glImageTargetWarp(
@@ -695,5 +694,24 @@ void GlRealityFrame::addNextDrawHiResScans(c8_PixelPinholeCameraModel intrinsics
 }
 
 bool GlRealityFrame::forceFinish_ = false;
+
+#ifdef JAVASCRIPT
+void GlRealityFrame::PixelPackBuffer::release() {
+  if (!id) {
+    return;
+  }
+  EM_ASM_(
+    {
+      const syncs = Module.ctx.__glSyncs_;
+      if (syncs && syncs[$0]) {
+        Module.ctx.deleteSync(syncs[$0]);
+        delete syncs[$0];
+      }
+    },
+    id);
+  glDeleteBuffers(1, &id);
+  id = 0;
+}
+#endif
 
 }  // namespace c8

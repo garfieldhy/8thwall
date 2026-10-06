@@ -64,7 +64,10 @@ public:
   void addNextDrawRoi(const ImageRoi &roi);
 
   // Fills the remaining ROI slots on the next draw with scans along a ray at increasing resolution.
-  void addNextDrawHiResScans(c8_PixelPinholeCameraModel intrinsics, HPoint2 scanRay);
+  // At most maxScans of them; the scans go from coarse to fine zoom, so a cap keeps the nearer
+  // distances and gives up the farthest first.
+  void addNextDrawHiResScans(
+    c8_PixelPinholeCameraModel intrinsics, HPoint2 scanRay, int maxScans = 1 << 20);
 
   // Begin processing the camera texture. If READ_IMMEDIATELY is set, this blocks on materializing
   // the result from the GPU. If DEFER_READ is set, this does not block on the GPU unless a
@@ -130,7 +133,30 @@ private:
 
   bool usePixelBuffer_ = false;
 #ifdef JAVASCRIPT
-  GLuint pixelBuffer_ = 0;
+  // The pixel-pack buffer the pyramid is read back through. Owned: deleted with the frame,
+  // moved with it, never copied — a DetectionImageLoader moves its frame into a deque and is
+  // destroyed once its features are out, and a buffer per target must not outlive it. The GPU
+  // fence that says when the buffer is filled lives on the JS side, keyed by the buffer's id
+  // (Module.ctx.__glSyncs_), one per frame: a single shared slot had every GlRealityFrame
+  // deleting every other's fence.
+  struct PixelPackBuffer {
+    GLuint id = 0;
+    PixelPackBuffer() = default;
+    PixelPackBuffer(PixelPackBuffer &&o) noexcept : id(o.id) { o.id = 0; }
+    PixelPackBuffer &operator=(PixelPackBuffer &&o) noexcept {
+      if (this != &o) {
+        release();
+        id = o.id;
+        o.id = 0;
+      }
+      return *this;
+    }
+    PixelPackBuffer(const PixelPackBuffer &) = delete;
+    PixelPackBuffer &operator=(const PixelPackBuffer &) = delete;
+    ~PixelPackBuffer() { release(); }
+    void release();
+  };
+  PixelPackBuffer pixelBuffer_;
 #endif
   Gr8FeatureShader *gr8Shader_ = nullptr;
 

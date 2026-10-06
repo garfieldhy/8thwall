@@ -26,6 +26,35 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
   let config_: RunConfig
   let paused_ = false
   let videoTime_ = -1
+  // Frames the camera actually presented, counted by requestVideoFrameCallback. A MediaStream's
+  // currentTime runs on between frames, so by currentTime alone every animation frame looked
+  // new and a 30fps camera was uploaded (twice, draw and compute) sixty times a second.
+  let presentedFrames_ = 0
+  let presentedSeen_ = -1
+  let presentedAt_ = 0
+  let presentedVideo_: HTMLVideoElement | null = null
+
+  const watchPresentedFrames = (v: HTMLVideoElement) => {
+    const rvfc = (v as HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: () => void) => void
+    }).requestVideoFrameCallback
+    if (!rvfc || presentedVideo_ === v) {
+      return
+    }
+    presentedVideo_ = v
+    presentedFrames_ = 0
+    presentedSeen_ = -1
+    presentedAt_ = 0
+    const tick = () => {
+      if (presentedVideo_ !== v) {
+        return
+      }
+      presentedFrames_++
+      presentedAt_ = performance.now()
+      rvfc.call(v, tick)
+    }
+    rvfc.call(v, tick)
+  }
   let xrcc_: XrccModule
   const xrccPromise_ = xrccPromise.then((xrcc) => { xrcc_ = xrcc })
 
@@ -289,6 +318,7 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
       runOnCameraStatusChange_!({status: 'hasStream', stream, rendersOpaque: false})
       video_.srcObject = stream
+      watchPresentedFrames(video_)
       doiOSWeChatWorkaround(video_)
 
       return waitForFrame(loadId).then((cancelled) => {
@@ -333,6 +363,7 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
     }
 
     video_ = null
+    presentedVideo_ = null
 
     if (shouldDoSafariWorkarounds()) {
       window.removeEventListener('pageshow', onSafariPageShow)
@@ -420,6 +451,7 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
         }
 
         video_.srcObject = stream
+      watchPresentedFrames(video_)
         doiOSWeChatWorkaround(video_)
         // TODO(alvin): getCapabilities() does not work on Firefox for Android. Find workaround
         //    when we decide to try to focus the camera.
@@ -484,8 +516,18 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
       return {repeatFrame: true, videoSize: {width: 1, height: 1}}
     }
     const pausedOrUnstarted = video_.paused || video_.videoWidth <= 0 || video_.videoHeight <= 0
+    let repeatFrame = pausedOrUnstarted || video_.currentTime === videoTime_
+    if (!repeatFrame && presentedVideo_ === video_) {
+      // The frame callback is not reliable for every offscreen video on iOS Safari. While it
+      // speaks, it decides; once it has been quiet for a quarter second, currentTime decides
+      // again, so a frame is never lost to its silence.
+      const quiet = performance.now() - presentedAt_ > 250
+      if (!quiet) {
+        repeatFrame = presentedFrames_ === presentedSeen_
+      }
+    }
     return {
-      repeatFrame: pausedOrUnstarted || video_.currentTime === videoTime_,
+      repeatFrame,
       videoSize: {
         width: video_.videoWidth,
         height: video_.videoHeight,
@@ -509,6 +551,7 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
       // reloading. In that case, just return the previous frame by keeping repeatFrame true.
       computeCtx.bindTexture(computeCtx.TEXTURE_2D, computeTexture)
       videoTime_ = video_.currentTime
+      presentedSeen_ = presentedFrames_
       computeCtx.texImage2D(
         computeCtx.TEXTURE_2D, 0, computeCtx.RGBA, computeCtx.RGBA, computeCtx.UNSIGNED_BYTE, video_
       )
@@ -516,14 +559,19 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
       // also load the camera feed into the draw context.  The computeTexture has a name, so we get
       // the corresponding drawCtx buffer from the drawTexMap cache.  Then we re-use the drawCtx
       // buffer and populate it with the camera feed frame.
-      // Cache current bindings.
-      const restoreTex = drawCtx.getParameter(drawCtx.TEXTURE_BINDING_2D)
-      const restoreUnpackFlipY = drawCtx.getParameter(drawCtx.UNPACK_FLIP_Y_WEBGL)
+      // Cache current bindings — unless the page resets its renderer's state itself
+      // (window.__arSkipGlStateRestore); each query is a synchronous trip to the GPU process.
+      const keepState = (window as unknown as {__arSkipGlStateRestore?: boolean})
+        .__arSkipGlStateRestore !== true
+      const restoreTex = keepState ? drawCtx.getParameter(drawCtx.TEXTURE_BINDING_2D) : null
+      const restoreUnpackFlipY =
+        keepState ? drawCtx.getParameter(drawCtx.UNPACK_FLIP_Y_WEBGL) : false
 
       // Bind texture and configure pixelStorei.
       drawCtx.bindTexture(drawCtx.TEXTURE_2D, drawTexture)
-      // We only need to change UNPACK_FLIP_Y_WEBGL if its value was 'true' before.
-      if (restoreUnpackFlipY) {
+      // We only need to change UNPACK_FLIP_Y_WEBGL if its value was 'true' before — or if we
+      // did not look.
+      if (restoreUnpackFlipY || !keepState) {
         drawCtx.pixelStorei(drawCtx.UNPACK_FLIP_Y_WEBGL, false)
       }
 
@@ -542,7 +590,9 @@ const SessionManagerGetUserMedia = (xrccPromise: Promise<XrccModule>) => {
       }
 
       // Restore bindings.
-      drawCtx.bindTexture(drawCtx.TEXTURE_2D, restoreTex)
+      if (keepState) {
+        drawCtx.bindTexture(drawCtx.TEXTURE_2D, restoreTex)
+      }
 
       // We only need to restore UNPACK_FLIP_Y_WEBGL if its value was 'true' before.
       if (restoreUnpackFlipY) {
