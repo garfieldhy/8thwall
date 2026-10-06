@@ -1,0 +1,59 @@
+# Keeps the miniese branch current with upstream 8thwall/8thwall.
+#
+# Every Monday (and on demand) it merges upstream's main into this branch and
+# pushes when the merge is clean. When it is not, it opens one issue and stops;
+# the merge is then done by hand, and the issue closed. A merged upstream does
+# not reach ar.miniese.com by itself: vendoring there is a deliberate step
+# (scripts/vendor-engine.sh --ref <commit>) followed by a device test.
+#
+# Scheduled workflows run from the repository's default branch, so this
+# branch is the default. GitHub disables Actions on forks until they are
+# enabled once in Settings → Actions.
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: miniese
+          fetch-depth: 0
+          lfs: false
+
+      - name: Merge upstream main
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "miniese-sync[bot]"
+          git config user.email "miniese-sync@users.noreply.github.com"
+          git remote add upstream https://github.com/8thwall/8thwall.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "already current"
+            exit 0
+          fi
+          if git merge --no-edit upstream/main; then
+            git push origin HEAD:miniese
+            echo "merged $(git rev-parse --short upstream/main)"
+          else
+            git merge --abort
+            if [ -z "$(gh issue list --label upstream-sync --state open --json number --jq '.[0].number')" ]; then
+              gh label create upstream-sync --color d93f0b --description "upstream merge needs a hand" 2>/dev/null || true
+              gh issue create --label upstream-sync \
+                --title "Upstream sync conflict with 8thwall/8thwall main" \
+                --body "Merging upstream main ($(git rev-parse --short upstream/main)) into miniese conflicted. Merge by hand, push, and close this issue; the weekly sync resumes from there."
+            fi
+            exit 1
+          fi
